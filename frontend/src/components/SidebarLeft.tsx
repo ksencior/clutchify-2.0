@@ -1,9 +1,11 @@
 import React from 'react';
 import Logo from '../assets/logo.png'
 import { useAuth } from '../context/AuthContext.ts';
+import { Link, useLocation } from 'react-router-dom';
 
 export const SidebarLeft: React.FC = () => {
     const { user, logout } = useAuth();
+    const location = useLocation();
   return (
     <aside className="sidebar-left">
       <div className="w-full">
@@ -13,20 +15,29 @@ export const SidebarLeft: React.FC = () => {
         </div>
 
         {/* Menu na wzór image_3de7dc.png */}
-        <nav className="flex flex-col gap-3">
-          <a href="#" className="nav-link nav-link-active">
-            <span>Home</span>
-            <i className="fa-solid fa-house text-sm" />
-          </a>
-          <a href="#" className="nav-link">
-            <span>Turnieje</span>
-            <i className="fa-solid fa-trophy text-sm" />
-          </a>
-          <a href="#" className="nav-link">
-            <span>Drużyny</span>
-            <i className="fa-solid fa-users text-sm" />
-          </a>
-        </nav>
+        <nav className="flex flex-col gap-2 px-4">
+            <Link 
+              to="/" 
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs uppercase tracking-widest font-medium transition-all duration-200 ${
+                location.pathname === '/' 
+                  ? 'bg-brand-red text-white shadow-glow-red-sm/20' 
+                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              Panel Główny
+            </Link>
+
+            <Link 
+              to="/teams" 
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs uppercase tracking-widest font-medium transition-all duration-200 ${
+                location.pathname === '/teams' 
+                  ? 'bg-brand-red text-white shadow-glow-red-sm/20' 
+                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              Drużyny
+            </Link>
+          </nav>
       </div>
 
       {/* Profil dolny */}

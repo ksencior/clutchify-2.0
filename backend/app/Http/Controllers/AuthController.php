@@ -23,6 +23,11 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
+        $user->player()->create([
+            'isAdmin' => false,
+            'isSpectator' => false,
+        ]);
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([

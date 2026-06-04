@@ -4,8 +4,7 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="dashboard-container">
       
-      {/* Sekcja LIVE (Dokładne odwzorowanie ramek i kropki z image_3de7dc.png) */}
-      <section className="panel-section">
+      {/* <section className="panel-section">
         <div className="flex items-center gap-3 mb-4">
           <h2 className="live-badge">Na Żywo</h2>
           <span className="relative flex h-2.5 w-2.5">
@@ -14,13 +13,11 @@ export const Dashboard: React.FC = () => {
           </span>
         </div>
         
-        {/* Kontener Twitch Embed */}
         <div className="w-full aspect-video bg-[#0a0a0a] rounded-lg flex items-center justify-center border border-[#161616] relative overflow-hidden group">
-          {/* Delikatny czerwony gradient w tle odtwarzacza przy hoverze */}
           <div className="absolute inset-0 bg-gradient-to-t from-brand-red/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
           <p className="text-gray-600 uppercase tracking-[4px] text-xs font-light">Odtwarzacz Twitch Embed</p>
         </div>
-      </section>
+      </section> */}
 
       {/* Nadchodzące mecze */}
       <section className="panel-section">

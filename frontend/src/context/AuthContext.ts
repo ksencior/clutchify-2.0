@@ -1,9 +1,22 @@
 import { createContext, useContext } from 'react';
 
+export interface PlayerProfile {
+  id: number;
+  user_id: number;
+  team_id: number | null;
+  steam_id: string | null;
+  avatar: string | null;
+  isAdmin: boolean;
+  isSpectator: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface User {
   id: number;
   name: string;
   email: string;
+  player?: PlayerProfile;
 }
 
 export interface AuthContextType {
