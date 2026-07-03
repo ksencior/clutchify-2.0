@@ -1,0 +1,330 @@
+:root {
+    --bg-dark: #080808;
+    --bg-card: #121212;
+    --brand-red: #ff002b;
+    --text-white: #ffffff;
+    --text-gray: #888888;
+    --border-color: #1a1a1a;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-white);
+    overflow: hidden;
+}
+
+.app-layout {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+}
+
+/* Sidebar Styles */
+.sidebar {
+    width: 260 bounds;
+    width: 260px;
+    background-color: #0d0d0d;
+    border-right: 1px solid var(--border-color);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.profile {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.profile span {
+    display: flex;
+    align-items: center;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: 900;
+    color: var(--brand-red);
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px rgba(255, 0, 43, 0.3);
+    text-align: center;
+}
+
+nav {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.nav-btn {
+    background: none;
+    border: none;
+    color: var(--text-gray);
+    padding: 12px 20px;
+    text-align: left;
+    font-size: 12px;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-white);
+}
+
+.nav-btn.active {
+    background-color: var(--brand-red);
+    color: var(--text-white);
+}
+
+/* Main Content Area */
+main {
+    flex-1: 1;
+    flex: 1;
+    padding: 40px;
+    overflow-y: auto;
+}
+
+h1 {
+    font-size: 28px;
+    font-weight: 800;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+}
+
+span.red-text {
+    color: var(--brand-red);
+}
+
+html.auth-mode .sidebar {
+    display: none !important;
+}
+
+#toast-container {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 9999;
+    pointer-events: none; /* Zabezpiecza przed blokowaniem kliknięć pod kontenerem */
+}
+
+.toast {
+    min-width: 280px;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    padding: 16px 20px;
+    border-radius: 8px;
+    color: var(--text-white);
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    border-left: 4px solid transparent;
+    animation: slideInRight 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+
+/* Kolory w zależności od typu powiadomienia */
+.toast.success {
+    border-left-color: #00E676;
+}
+
+.toast.error {
+    border-left-color: var(--brand-red);
+}
+
+.toast.info {
+    border-left-color: #2979FF;
+}
+
+/* Klasa dodawana przez JS przed usunięciem elementu */
+.toast.fade-out {
+    animation: fadeOutRight 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+
+/* Animacje Keyframes */
+@keyframes slideInRight {
+    from {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+}
+
+/* --- WIZARD KONFIGURACYJNY (SETUP) --- */
+.setup-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+/* Pasek postępu */
+.progress-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 600px;
+    margin: 0 auto 40px auto;
+    position: relative;
+}
+
+.progress-container::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: var(--border-color);
+    z-index: 0;
+}
+
+.progress-step {
+    position: relative;
+    z-index: 1;
+    background-color: var(--bg-dark);
+    border: 2px solid var(--border-color);
+    color: var(--text-gray);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.progress-step.active {
+    border-color: var(--brand-red);
+    color: var(--brand-red);
+    box-shadow: 0 0 15px rgba(255, 0, 43, 0.2);
+}
+
+.progress-step.completed {
+    background-color: var(--brand-red);
+    border-color: var(--brand-red);
+    color: var(--text-white);
+}
+
+/* Kontenery kroków */
+.setup-step {
+    display: none; /* Domyślnie ukryte */
+    max-width: 600px;
+    margin: 0 auto;
+    animation: fadeIn 0.4s ease forwards;
+}
+
+.setup-step.active {
+    display: block;
+}
+
+/* Karty wyboru w Kroku 2 */
+.choice-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.choice-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    padding: 30px 20px;
+    border-radius: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.choice-card:hover, .choice-card.selected {
+    border-color: var(--brand-red);
+    background-color: rgba(255, 0, 43, 0.05);
+}
+
+/* Integracje w Kroku 1 */
+.integration-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 15px;
+    border-radius: 8px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 15px;
+    color: white;
+    transition: opacity 0.2s;
+}
+
+.integration-btn:hover { opacity: 0.9; }
+.btn-steam { background-color: #171a21; border: 1px solid #2a475e; }
+.btn-discord { background-color: #5865F2; }
+.btn-connected { background-color: #00E676 !important; color: #080808 !important; pointer-events: none; }
+
+/* Karta Gracza w Kroku 3 */
+.player-preview-card {
+    background: linear-gradient(135deg, var(--bg-card) 0%, #1a0004 100%);
+    border: 1px solid var(--brand-red);
+    border-radius: 16px;
+    padding: 30px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(255, 0, 43, 0.1);
+}
+
+.player-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 3px solid var(--brand-red);
+    margin: 0 auto 15px auto;
+    background-color: #222;
+    object-fit: cover;
+}
+.player-avatar-nav {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid var(--brand-red);
+    margin: 0 8px;
+    background-color: #222;
+    object-fit: cover;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}

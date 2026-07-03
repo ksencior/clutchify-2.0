@@ -1,0 +1,22 @@
+<div class="auth-container" style="max-width: 400px; margin: 60px auto; background: var(--bg-card); padding: 30px; border: 1px solid var(--border-color); border-radius: 16px;">
+    <h1 style="text-align: center; margin-bottom: 10px;">Zaloguj <span class="red-text">Się</span></h1>
+    <p style="color: var(--text-gray); text-align: center; font-size: 13px; margin-bottom: 25px;">Zaloguj się, aby zarządzać swoją drużyną</p>
+
+    <form id="login-form" onsubmit="authController.handleLogin(event)" style="display: flex; flex-direction: column; gap: 15px;">
+        <div>
+            <label style="display: block; font-size: 11px; text-transform: uppercase; color: var(--text-gray); margin-bottom: 5px; letter-spacing: 1px;">Adres Email</label>
+            <input type="email" id="log-email" required style="width: 100%; background: #080808; border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; color: white; outline: none;">
+        </div>
+
+        <div>
+            <label style="display: block; font-size: 11px; text-transform: uppercase; color: var(--text-gray); margin-bottom: 5px; letter-spacing: 1px;">Hasło</label>
+            <input type="password" id="log-password" required style="width: 100%; background: #080808; border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; color: white; outline: none;">
+        </div>
+
+        <button type="submit" class="nav-btn active" style="text-align: center; padding: 14px; margin-top: 10px; font-size: 13px;">Zaloguj się</button>
+    </form>
+
+    <p style="text-align: center; font-size: 13px; color: var(--text-gray); margin-top: 20px;">
+        Nie masz konta? <span class="red-text" style="cursor: pointer; font-weight: 600;" onclick="router.navigate('register')">Zarejestruj się</span>
+    </p>
+</div>

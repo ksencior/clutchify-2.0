@@ -1,0 +1,64 @@
+<div class="setup-header">
+    <h1>Konfiguracja <span class="red-text">Profilu</span></h1>
+    <p style="color: var(--text-gray);">Skonfiguruj swoje konto, aby w pełni korzystać z platformy.</p>
+</div>
+
+<div class="progress-container">
+    <div class="progress-step active" id="prog-1">1</div>
+    <div class="progress-step" id="prog-2">2</div>
+    <div class="progress-step" id="prog-3">3</div>
+</div>
+
+<div class="setup-step active" id="step-1">
+    <h2 style="text-align: center; margin-bottom: 20px;">Połącz swoje konta</h2>
+    
+    <button class="integration-btn btn-steam" id="btn-steam" onclick="setupController.simulateConnect('steam')">
+        Połącz ze Steam
+    </button>
+    <button class="integration-btn btn-discord" id="btn-discord" onclick="setupController.simulateConnect('discord')">
+        Połącz z Discord
+    </button>
+
+    <div style="text-align: right; margin-top: 30px;">
+        <button class="nav-btn active" onclick="setupController.nextStep()">Dalej &#8594;</button>
+    </div>
+</div>
+
+<div class="setup-step" id="step-2">
+    <h2 style="text-align: center; margin-bottom: 20px;">Jaki jest Twój cel?</h2>
+    
+    <div class="choice-grid">
+        <div class="choice-card" onclick="setupController.selectChoice('create', this)">
+            <h3 class="red-text">Stwórz Drużynę</h3>
+            <p style="font-size: 12px; color: var(--text-gray); margin-top: 10px;">Zostań kapitanem i zbierz swój własny skład do turniejów.</p>
+        </div>
+        <div class="choice-card" onclick="setupController.selectChoice('find', this)">
+            <h3>Znajdź Drużynę</h3>
+            <p style="font-size: 12px; color: var(--text-gray); margin-top: 10px;">Dodaj się do giełdy wolnych agentów (LFT).</p>
+        </div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; margin-top: 30px;">
+        <button class="nav-btn" onclick="setupController.prevStep()">&#8592; Wstecz</button>
+        <div>
+            <button class="nav-btn" style="margin-right: 10px;" onclick="setupController.nextStep()">Pomiń ten krok</button>
+            <button class="nav-btn active" onclick="setupController.nextStep()">Dalej &#8594;</button>
+        </div>
+    </div>
+</div>
+
+<div class="setup-step" id="step-3">
+    <h2 style="text-align: center; margin-bottom: 20px;">Twoja Karta Gracza</h2>
+    
+    <div class="player-preview-card">
+        <img src="https://ui-avatars.com/api/?name=Player&background=121212&color=ff002b" alt="Avatar" class="player-avatar" id="preview-avatar">
+        <h2 id="preview-username">Nazwa_Gracza</h2>
+        <p style="color: var(--text-gray); font-size: 13px; margin-top: 5px;" id="preview-steam-id">Steam ID: Brak połączenia</p>
+        <p style="color: var(--text-gray); font-size: 13px;" id="preview-choice">Status: Niezdecydowany</p>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; margin-top: 30px;">
+        <button class="nav-btn" onclick="setupController.prevStep()">&#8592; Wstecz</button>
+        <button class="nav-btn active" onclick="setupController.finishSetup()" style="background-color: #00E676; color: #080808;">Zakończ Konfigurację &#10003;</button>
+    </div>
+</div>

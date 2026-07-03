@@ -1,0 +1,27 @@
+<div class="auth-container" style="max-width: 400px; margin: 60px auto; background: var(--bg-card); padding: 30px; border: 1px solid var(--border-color); border-radius: 16px;">
+    <h1 style="text-align: center; margin-bottom: 10px;">Stwórz <span class="red-text">Konto</span></h1>
+    <p style="color: var(--text-gray); text-align: center; font-size: 13px; margin-bottom: 25px;">Dołącz do platformy turniejowej Clutchify</p>
+
+    <form id="register-form" onsubmit="authController.handleRegister(event)" style="display: flex; flex-direction: column; gap: 15px;">
+        <div>
+            <label style="display: block; font-size: 11px; text-transform: uppercase; color: var(--text-gray); margin-bottom: 5px; letter-spacing: 1px;">Nazwa użytkownika</label>
+            <input type="text" id="reg-username" required style="width: 100%; background: #080808; border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; color: white; outline: none;">
+        </div>
+        
+        <div>
+            <label style="display: block; font-size: 11px; text-transform: uppercase; color: var(--text-gray); margin-bottom: 5px; letter-spacing: 1px;">Adres Email</label>
+            <input type="email" id="reg-email" required style="width: 100%; background: #080808; border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; color: white; outline: none;">
+        </div>
+
+        <div>
+            <label style="display: block; font-size: 11px; text-transform: uppercase; color: var(--text-gray); margin-bottom: 5px; letter-spacing: 1px;">Hasło</label>
+            <input type="password" id="reg-password" required style="width: 100%; background: #080808; border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; color: white; outline: none;">
+        </div>
+
+        <button type="submit" class="nav-btn active" style="text-align: center; padding: 14px; margin-top: 10px; font-size: 13px;">Zarejestruj się</button>
+    </form>
+
+    <p style="text-align: center; font-size: 13px; color: var(--text-gray); margin-top: 20px;">
+        Masz już konto? <span class="red-text" style="cursor: pointer; font-weight: 600;" onclick="router.navigate('login')">Zaloguj się</span>
+    </p>
+</div>
