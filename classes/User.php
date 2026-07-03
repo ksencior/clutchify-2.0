@@ -15,11 +15,24 @@ class User {
     }
 
     private function loadUserData(int $userId): void {
-        $sql = "SELECT u.id, u.username, u.email, p.id as player_id, p.team_id, t.name as team_name, p.avatar, p.is_substitute, p.isAdmin 
-                FROM users u 
-                LEFT JOIN players p ON u.id = p.user_id
-                JOIN teams t ON p.team_id = t.id
-                WHERE u.id = ?";
+        $sql = "
+            SELECT
+                u.id,
+                u.username,
+                u.email,
+                p.id AS player_id,
+                p.team_id,
+                t.name AS team_name,
+                p.steam_id,
+                p.avatar,
+                p.discord_id,
+                p.is_substitute,
+                p.isAdmin
+            FROM users u
+            LEFT JOIN players p ON u.id = p.user_id
+            LEFT JOIN teams t ON p.team_id = t.id
+            WHERE u.id = ?
+            ";
                 
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$userId]);
@@ -34,7 +47,9 @@ class User {
                 'player_id' => $data['player_id'],
                 'team_id' => $data['team_id'],
                 'team_name' => $data['team_name'],
+                'steam_id' => $data['steam_id'],
                 'avatar' => $data['avatar'],
+                'discord_id' => $data['discord_id'],
                 'is_substitute' => (bool)$data['is_substitute'],
                 'isAdmin' => (bool)$data['isAdmin']
             ];

@@ -4,7 +4,6 @@ export const teamController = {
     init: async () => {
         teamController.bindEvents();
         window.teamController = teamController;
-        
         await teamController.loadCurrentTeamState();
     },
 
@@ -14,12 +13,14 @@ export const teamController = {
         const createForm = document.getElementById('create-team-form');
         const btnSaveLogo = document.getElementById('btn-save-logo');
         const btnInvite = document.getElementById('btn-invite-player');
+        const btnLeave = document.getElementById('btn-leave-team');
 
         if (btnBrowse) btnBrowse.addEventListener('click', () => teamController.switchSubView('browse'));
         if (btnCreate) btnCreate.addEventListener('click', () => teamController.switchSubView('create'));
         if (createForm) createForm.addEventListener('submit', (e) => teamController.handleCreateTeam(e));
         if (btnSaveLogo) btnSaveLogo.addEventListener('click', () => teamController.updateLogo());
         if (btnInvite) btnInvite.addEventListener('click', () => teamController.invitePlayer());
+        if (btnLeave) btnLeave.addEventListener('click', () => teamController.leaveTeam());
     },
 
     switchSubView: (view) => {
@@ -116,6 +117,7 @@ export const teamController = {
 
             if (data.success) {
                 window.Toast.show(data.message, 'success');
+                window.authController.checkSession();
                 await teamController.loadCurrentTeamState();
             } else {
                 window.Toast.show(data.message, 'error');
@@ -252,6 +254,32 @@ export const teamController = {
             }
         } catch (err) {
             window.Toast.show('Błąd podczas usuwania gracza.', 'error');
+        }
+    },
+    leaveTeam: async () => {
+        try {
+            const response = await fetch('api.php?action=leave_team');
+            const data = await response.json();
+            if (data.success && data.action && data.action === 'popout') {
+                window.Popout.create('Potwierdź akcję', 'Wychodząc jako ostatni członek drużyny, jednocześnie usuwasz ją całą. Potwierdź akcję, jeśli chcesz usunąć drużynę.', null, async () => {
+                    const delResponse = await fetch('api.php?action=delete_team');
+                    const delData = await delResponse.json();
+                    if (!delData.success) {
+                        window.Toast.show(delData.message, 'error');
+                        return;
+                    }
+                    window.Toast.show(delData.message);
+                    window.authController.checkSession();
+                    window.router.navigate('dashboard');
+                }, 'confirm');
+            } else if (data.success && !data.action) {
+                window.Toast.show(data.message);
+            } else if (!data.success) {
+                window.Toast.show(data.message, 'error');
+            }
+            window.authController.checkSession();
+        } catch (err) {
+            window.Toast.show('Wystąpił błąd', 'error');
         }
     }
 };

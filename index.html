@@ -22,6 +22,7 @@
             <nav>
                 <button class="nav-btn active" onclick="router.navigate('dashboard')">Panel Główny</button>
                 <button class="nav-btn" onclick="router.navigate('teams')">Drużyny</button>
+                <button class="nav-btn" onclick="router.navigate('tournaments')">Turnieje</button>
             </nav>
 
             <div class="profile">
@@ -30,6 +31,9 @@
         </aside>
         <main id="app"></main>
 
+    </div>
+    <div id="popout-overlay">
+        <div id="popout-container"></div>
     </div>
     <div id="toast-container"></div>
     <script type="module" src="app.js"></script>

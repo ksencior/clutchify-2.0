@@ -5,6 +5,7 @@ import { AppState } from './state.js';
 import { authController } from './controllers/AuthController.js';
 import { setupController } from './controllers/SetupController.js';
 import { teamController } from './controllers/TeamController.js';
+import { dashboardController } from './controllers/DashboardController.js';
 
 window.authController = authController;
 window.setupController = setupController;
@@ -24,6 +25,8 @@ const router = {
         } else {
             document.documentElement.classList.remove('auth-mode');
         }
+
+        authController.checkSession();
 
         const appContainer = document.getElementById('app');
         try {
@@ -59,7 +62,7 @@ const router = {
         } else if (viewName === 'setup') {
             setupController.init();
         } else if (viewName === 'dashboard') {
-            renderPlayerCard();
+            dashboardController.init();
         }
     }
 };
@@ -88,6 +91,88 @@ const Toast = {
 
 window.Toast = Toast;
 
+const Popout = {
+    onClose: null,
+    onConfirm: null,
+    create: (title, message, onclose = null, onconfirm = null, type = 'info', customHTML = null) => {
+        const bg = document.getElementById('popout-overlay');
+        const container = document.getElementById('popout-container');
+        if (!container || !bg) return;
+        bg.classList.add('active');
+
+        Popout.onClose = onclose;
+        Popout.onConfirm = onconfirm;
+
+        const popoutEl = document.createElement('div');
+        popoutEl.id = "popout";
+        popoutEl.classList.add('popout', type);
+        let html;
+        if (type === 'info') {
+            html = `
+                <h3>${title}</h3>
+                <p>${message}</p>
+                <button class="btn-ok" onclick="Popout.close()" style="margin-top: auto;">Zamknij</button>
+            `;
+        } else if (type === 'confirm') {
+            html = `
+                <h3>${title}</h3>
+                <p>${message}</p>
+                <div style="display: flex; align-items: center; justify-content: space-around">
+                    <button class="btn-cancel" onclick="Popout.close() " style="margin: 0; margin-top: auto;">Anuluj</button>
+                    <button class="btn-confirm" onclick="Popout.confirm()" style="margin: 0; margin-top: auto;">Potwierdź</button>
+                </div>
+            `;
+        } else if (type === 'warning') {
+            html = `
+                <h3>${title}</h3>
+                <p>${message}</p>
+                <button class="btn-confirm" onclick="Popout.close()" style="margin-top: auto;">Akceptuję</button>
+            `;
+        } else if (type === 'custom') {
+            if (!customHTML) return;
+            html = customHTML;
+        }
+        popoutEl.innerHTML = html;
+        container.append(popoutEl);
+    },
+    close: () => {
+        const bg = document.getElementById('popout-overlay');
+        const container = document.getElementById('popout-container');
+        if (!container || !bg) return;
+        const activePopout = container.querySelector('#popout');
+        if (!activePopout) return;
+        activePopout.classList.add('fade-out');
+        activePopout.addEventListener('animationend', () => {
+            activePopout.remove();
+            if (typeof Popout.onClose === "function") {
+                Popout.onClose();
+            }
+
+            Popout.onClose = null;
+        }, {once: true});
+        bg.classList.remove('active');
+    },
+    confirm: () => {
+        const bg = document.getElementById('popout-overlay');
+        const container = document.getElementById('popout-container');
+        if (!container || !bg) return;
+        const activePopout = container.querySelector('#popout');
+        if (!activePopout) return;
+        activePopout.classList.add('fade-out');
+        activePopout.addEventListener('animationend', () => {
+            activePopout.remove();
+            if (typeof Popout.onConfirm === "function") {
+                Popout.onConfirm();
+            }
+
+            Popout.onClose = null;
+        }, {once: true});
+        bg.classList.remove('active');
+    }
+}
+
+window.Popout = Popout;
+
 window.onpopstate = (event) => {
     if (event.state && event.state.view) {
         router.navigate(event.state.view, false);
@@ -105,13 +190,3 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     router.navigate(defaultView);
 });
-
-function renderPlayerCard() {
-    const usernameEl = document.getElementById('dashboard-username');
-    const avatarEl = document.getElementById('dashboard-avatar');
-    const teamEl = document.getElementById('dashboard-team');
-
-    usernameEl.innerText = AppState.isLoggedIn() ? AppState.getUser().username : 'Nowy_Gracz';
-    teamEl.innerText = AppState.getUser().player.team_id !== null? AppState.getUser().player.team_name : "Brak drużyny";
-    avatarEl.src = `https://ui-avatars.com/api/?name=${AppState.isLoggedIn() ? AppState.getUser().username : 'P'}&background=121212&color=ff002b`;
-}

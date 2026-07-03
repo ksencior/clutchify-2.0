@@ -5,6 +5,9 @@
     --text-white: #ffffff;
     --text-gray: #888888;
     --border-color: #1a1a1a;
+    --brand-blue: #0077ff;
+    --warning: #ff7b00;
+    --warning-border: #29241f;
 }
 
 * {
@@ -94,6 +97,68 @@ nav {
     color: var(--text-white);
 }
 
+.btn-ok {
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: var(--text-gray);
+    padding: 12px 20px;
+    font-size: 12px;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    text-align: center;
+    margin: 0 auto;
+}
+
+.btn-ok:hover {
+    color: var(--text-white);
+    background: var(--brand-blue);
+}
+
+.btn-cancel {
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: var(--brand-red);
+    padding: 12px 20px;
+    font-size: 12px;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.btn-cancel:hover {
+    color: var(--text-white);
+    background: var(--brand-red);
+}
+
+.btn-confirm {
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: var(--text-gray);
+    padding: 12px 20px;
+    font-size: 12px;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    text-align: center;
+    margin: 0 auto;
+}
+
+.btn-confirm:hover {
+    color: #080808;
+    background-color: #00E676; 
+}
+
 /* Main Content Area */
 main {
     flex-1: 1;
@@ -126,6 +191,80 @@ html.auth-mode .sidebar {
     gap: 12px;
     z-index: 9999;
     pointer-events: none; /* Zabezpiecza przed blokowaniem kliknięć pod kontenerem */
+}
+
+#popout-overlay {
+    position: fixed;
+    pointer-events: none;
+    top: 0; left: 0;
+    bottom: 0; right: 0;
+    background: rgba(0, 0, 0, 0);
+    backdrop-filter: blur(0px);
+    transition: all 0.2s ease;
+}
+
+#popout-overlay.active {
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    pointer-events: all;
+}
+
+#popout-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#popout {
+    min-width: 400px; max-width: 500px;
+    min-height: 150px; max-height: 500px;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    animation: fadeIn 0.4s ease forwards;
+}
+
+#popout h3 {
+    text-transform: uppercase;
+    font-size: 300;
+    color: var(--text-gray);
+}
+#popout p {
+    margin: 10px 0;
+}
+
+#popout.info {
+    border: 1px solid var(--border-color);
+}
+#popout.warning {
+    border: 1px solid var(--warning-border);
+}
+
+#popout.fade-out {
+    animation: fadeOut 0.4s ease forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
 }
 
 .toast {

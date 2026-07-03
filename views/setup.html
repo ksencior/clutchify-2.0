@@ -12,10 +12,10 @@
 <div class="setup-step active" id="step-1">
     <h2 style="text-align: center; margin-bottom: 20px;">Połącz swoje konta</h2>
     
-    <button class="integration-btn btn-steam" id="btn-steam" onclick="setupController.simulateConnect('steam')">
+    <button class="integration-btn btn-steam" id="btn-steam" onclick="setupController.connectAccount('steam')">
         Połącz ze Steam
     </button>
-    <button class="integration-btn btn-discord" id="btn-discord" onclick="setupController.simulateConnect('discord')">
+    <button class="integration-btn btn-discord" id="btn-discord" onclick="setupController.connectAccount('discord')">
         Połącz z Discord
     </button>
 
@@ -54,7 +54,6 @@
         <img src="https://ui-avatars.com/api/?name=Player&background=121212&color=ff002b" alt="Avatar" class="player-avatar" id="preview-avatar">
         <h2 id="preview-username">Nazwa_Gracza</h2>
         <p style="color: var(--text-gray); font-size: 13px; margin-top: 5px;" id="preview-steam-id">Steam ID: Brak połączenia</p>
-        <p style="color: var(--text-gray); font-size: 13px;" id="preview-choice">Status: Niezdecydowany</p>
     </div>
 
     <div style="display: flex; justify-content: space-between; margin-top: 30px;">

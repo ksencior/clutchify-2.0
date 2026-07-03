@@ -200,6 +200,62 @@ switch ($action) {
         echo json_encode(['success' => true, 'message' => "Gracz $targetUsername dołączył do składu!"]);
         break;
 
+    case 'leave_team':
+        if (!isset($_SESSION['user_id'])) exit;
+        $stmt = $pdo->prepare("SELECT t.id, t.captain_id FROM teams t JOIN players p ON t.id = p.team_id WHERE p.user_id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $result = $stmt->fetch();
+        $teamId = $result['id'];
+        $captainId = $result['captain_id'];
+
+        $stmt = $pdo->prepare("SELECT COUNT(user_id) as 'liczba_graczy' FROM players WHERE team_id = ? AND is_substitute = false;");
+        $stmt->execute([$teamId]);
+        $result = $stmt->fetch();
+        $pCount = $result['liczba_graczy'];
+
+        if ($pCount <= 1) {
+            echo json_encode(['success' => true, 'action' => 'popout']);
+            exit;
+        } else {
+            if ($captainId === $_SESSION['user_id']) {
+                $stmt = $pdo->prepare("SELECT user_id FROM players WHERE team_id = ? AND user_id != ? AND is_substitute = false ORDER BY RAND()");
+                $stmt->execute([$teamId, $captainId]);
+                $members = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                foreach($members as $m) {
+                    $stmt = $pdo->prepare("UPDATE teams SET captain_id = ? WHERE id = ?");
+                    $stmt->execute([$m['user_id'], $teamId]);
+                    break;
+                }
+                $stmt = $pdo->prepare("UPDATE players SET team_id = NULL WHERE user_id = ?");
+                $stmt->execute([$_SESSION['user_id']]);
+            } else {
+                // wychodzi
+                $stmt = $pdo->prepare("UPDATE players SET team_id = NULL WHERE user_id = ?");
+                $stmt->execute([$_SESSION['user_id']]);
+            }
+            echo json_encode(['success' => true, 'message' => "Opuszczono drużynę."]);
+        }
+
+        break;
+    case 'delete_team':
+        if (!isset($_SESSION['user_id'])) exit;
+        $stmt = $pdo->prepare("SELECT t.id, t.captain_id FROM teams t JOIN players p ON t.id = p.team_id WHERE p.user_id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $result = $stmt->fetch();
+        $teamId = $result['id'];
+        $captainId = $result['captain_id'];
+
+        if ($captainId === $_SESSION['user_id']) {
+            $stmt = $pdo->prepare("DELETE FROM teams WHERE id = ?");
+            $stmt->execute([$teamId]);
+            $stmt = $pdo->prepare("UPDATE players SET team_id = NULL WHERE user_id = ?");
+            $stmt->execute([$_SESSION['user_id']]);
+
+            echo json_encode(['success' => true, 'message' => "Opuszczono oraz usunięto drużynę."]);
+            exit;
+        }
+        echo json_encode(['success' => false, 'message' => "Coś poszło nie tak."]);
+        break;
     // Wyrzucanie gracza ze składu
     case 'kick_player':
         if (!isset($_SESSION['user_id'])) exit;
@@ -226,7 +282,58 @@ switch ($action) {
 
         echo json_encode(['success' => true, 'message' => 'Gracz został usunięty ze składu.']);
         break;
+    case 'check-for-configuration':
+        if (!isset($_SESSION['user_id'])) exit;
+        $stmt = $pdo->prepare("SELECT steam_id, discord_id FROM players WHERE user_id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $response = $stmt->fetch();
+        if ($response['steam_id'] == NULL && $response['discord_id'] == NULL) {
+            echo json_encode(['success' => true, 'required' => true]);
+            exit;
+        }
+        echo json_encode(['success' => true, 'required' => false]);
+        break;
+    case 'ensure_connection':
+        if (!isset($_SESSION['user_id'])) exit;
+        $input = json_decode(file_get_contents('php://input'), true);
+        $provider = ($input['provider'] ?? NULL);
 
+        if (!$provider) {
+            echo json_encode(['success' => false, 'message' => 'Unknown provider.']);
+            exit;
+        }
+
+        if ($provider === 'steam') {
+            $stmt = $pdo->prepare('SELECT steam_id FROM players WHERE user_id = ?');
+            $stmt->execute([$_SESSION['user_id']]);
+            $res = $stmt->fetch();
+
+            $steamId = $res['steam_id'];
+
+            if (!$res || $steamId == NULL) {
+                echo json_encode(['success' => true, 'connected' => false]);
+                exit;
+            } else {
+                echo json_encode(['success' => true, 'connected' => true, 'debug' => $steamId]);
+                exit;
+            }
+        } else if ($provider === 'discord') {
+            $stmt = $pdo->prepare('SELECT discord_id FROM players WHERE user_id = ?');
+            $stmt->execute([$_SESSION['user_id']]);
+            $res = $stmt->fetch();
+
+            $discord_id = $res['discord_id'];
+
+            if (!$res || $discord_id == NULL) {
+                echo json_encode(['success' => true, 'connected' => false]);
+                exit;
+            } else {
+                echo json_encode(['success' => true, 'connected' => true, 'debug' => $discord_id]);
+                exit;
+            }
+        }
+        echo json_encode(['success' => false, 'message' => 'Unknown provider.']);
+        break;
     default:
         echo json_encode(['message' => 'Nieznana akcja API']);
         break;

@@ -1,15 +1,17 @@
 import { AppState } from '../state.js';
+import { authController } from './AuthController.js';
 
 export const setupController = {
     currentStep: 1,
-    mockData: {
+    setupData: {
         steamConnected: false,
         discordConnected: false,
         choice: 'Pominięto'
     },
     init: () => {
         setupController.currentStep = 1;
-        setupController.mockData = { steamConnected: false, discordConnected: false, choice: 'Pominięto' };
+        setupController.ensureConnection('steam');
+        setupController.ensureConnection('discord');
         setupController.updateUI();
     },
 
@@ -46,21 +48,41 @@ export const setupController = {
         if (currentStepEl) currentStepEl.classList.add('active');
     },
 
-    simulateConnect: (provider) => {
+    connectAccount: async (provider) => {
+        if (provider === 'steam') {
+            window.location.href = '/services/connect_steam.php';
+        } else if (provider === 'discord') {
+            window.location.href = 'https://discord.com/oauth2/authorize?client_id=1522618604934271017&response_type=code&redirect_uri=http%3A%2F%2Fclutchify.test%2Fservices%2Fconnect_discord.php&scope=identify';
+        }
+    },
+
+    ensureConnection: async (provider) => {
         const btn = document.getElementById(`btn-${provider}`);
         btn.innerText = 'Łączenie...';
         btn.style.opacity = '0.5';
 
-        setTimeout(() => {
-            btn.classList.add('btn-connected');
-            btn.innerHTML = `Połączono z ${provider.charAt(0).toUpperCase() + provider.slice(1)} &#10003;`;
-            btn.style.opacity = '1';
-            
-            if (provider === 'steam') setupController.mockData.steamConnected = true;
-            if (provider === 'discord') setupController.mockData.discordConnected = true;
-            
-            window.Toast.show(`Konto ${provider} zostało połączone!`, 'success');
-        }, 1000);
+        const response = await fetch('api.php?action=ensure_connection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider: provider })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            if (data.connected == true) {
+                btn.classList.add('btn-connected');
+                btn.innerHTML = `Połączono z ${provider.charAt(0).toUpperCase() + provider.slice(1)}`;
+                btn.style.opacity = '1';
+                btn.disabled = true;
+                if (provider === 'steam') setupController.setupData.steamConnected = true;
+                if (provider === 'discord') setupController.setupData.discordConnected = true;
+            } else {
+                btn.innerText = `Połącz z ${provider}`;
+                btn.style.opacity = '1';
+            }
+        } else {
+            window.Toast.show(data.message, 'error');
+        }
     },
 
     selectChoice: (type, element) => {
@@ -69,29 +91,37 @@ export const setupController = {
         // Dodajemy do klikniętego
         element.classList.add('selected');
         
-        setupController.mockData.choice = type === 'create' ? 'Chce założyć drużynę' : 'Szuka drużyny (LFT)';
+        if (type === 'create') {
+            setupController.setupData.choice == 'create';
+        } else {
+            setupController.setupData.choice == 'lft';
+        }
     },
 
     renderPlayerCard: () => {
         const usernameEl = document.getElementById('preview-username');
         const steamIdEl = document.getElementById('preview-steam-id');
         const avatarEl = document.getElementById('preview-avatar');
-        const choiceEl = document.getElementById('preview-choice');
+
+        authController.checkSession();
 
         usernameEl.innerText = AppState.isLoggedIn() ? AppState.getUser().username : 'Nowy_Gracz';
-        choiceEl.innerText = `Status: ${setupController.mockData.choice}`;
+        avatarEl.src = `https://ui-avatars.com/api/?name=${AppState.isLoggedIn() ? AppState.getUser().username : 'P'}&background=121212&color=ff002b`;
 
-        if (setupController.mockData.steamConnected) {
-            steamIdEl.innerText = 'Steam ID: STEAM_0:1:12345678';
-            avatarEl.src = 'https://api.dicebear.com/7.x/avataaars/svg?seed=Clutchify&backgroundColor=121212'; 
+        if (AppState.getUser().player.steam_id != null) {
+            steamIdEl.innerText = 'Połączono konto steam';
         } else {
-            steamIdEl.innerText = 'Steam ID: Brak połączenia';
-            avatarEl.src = `https://ui-avatars.com/api/?name=${AppState.isLoggedIn() ? AppState.getUser().username : 'P'}&background=121212&color=ff002b`;
+            steamIdEl.innerText = 'Nie połączono konta steam!';
         }
     },
 
     finishSetup: () => {
         window.Toast.show('Profil został pomyślnie skonfigurowany!', 'success');
-        window.router.navigate('dashboard');
+
+        if (setupController.setupData.choice === 'create') { 
+            window.router.navigate('teams');
+        } else {
+            window.router.navigate('dashboard');
+        }
     }
 }

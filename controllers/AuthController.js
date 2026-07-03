@@ -79,7 +79,14 @@ export const authController = {
 
             if (data.success) {
                 await authController.checkSession();
-                window.router.navigate('setup');
+                const res = await fetch('api.php?action=check-for-configuration');
+                const confData = await res.json();
+
+                if (confData.success && confData.required) {
+                    window.router.navigate('setup');
+                } else {
+                    window.router.navigate('dashboard');
+                }
             } else {
                 window.Toast.show(data.message, 'error');
             }

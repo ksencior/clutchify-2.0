@@ -1,10 +1,37 @@
 <h1>Panel <span class="red-text">Główny</span></h1>
 <div class="dashboard-container">
-    <div style="width: 300px; margin: 0 auto;">
-        <div class="player-preview-card">
+    <div style="height: 300px; display: flex; justify-content: space-between; align-items: center;">
+        <h2 id="dashboard-welcome-text" style="font-weight: 500; text-transform: uppercase; letter-spacing: 1px; font-size: 180%;">Witaj, userze</h2>
+        <div class="player-preview-card" style="width: 400px;">
             <img src="https://ui-avatars.com/api/?name=Player&background=121212&color=ff002b" alt="Avatar" class="player-avatar" id="dashboard-avatar">
             <h2 id="dashboard-username">Nazwa_Gracza</h2>
             <p style="color: var(--text-gray); font-size: 13px; margin-top: 5px;" id="dashboard-team">Steam ID: Brak połączenia</p>
+        </div>
+    </div>
+    <div style="width: 800px; height: 400px; margin: 0 auto; padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-card); display: flex; align-items: stretch; justify-content: center; flex-wrap: wrap; gap: 5px;">
+        <div style="width: 255px; border-radius: 8px; background: #1d1d1d; cursor: pointer;" onclick="router.navigate('tournaments')">
+            <div class="mode-poster" style="height: 300px; background: #fa1616; background: linear-gradient(0deg,rgba(250, 22, 22, 1) 0%, var(--bg-card) 85%); display: flex; justify-content: center; align-items: center; font-size: 500%">
+                🌐
+            </div>
+            <div class="mode-name" style="height: 80px; display: flex; justify-content: center; align-items: center;">
+                <h3 style="font-weight: 500; text-transform: uppercase; letter-spacing: 1px; font-size: 120%;">Przeglądaj turnieje</h3>
+            </div>
+        </div>
+        <div style="width: 255px; border-radius: 8px; background: #1d1d1d; cursor: pointer;" onclick="router.navigate('teams')">
+            <div class="mode-poster" style="height: 300px; background: #fa1616; background: linear-gradient(0deg,rgba(250, 22, 22, 1) 0%, var(--bg-card) 85%); display: flex; justify-content: center; align-items: center; font-size: 500%;">
+                👥
+            </div>
+            <div class="mode-name" style="height: 80px; display: flex; justify-content: center; align-items: center;">
+                <h3 style="font-weight: 500; text-transform: uppercase; letter-spacing: 1px; font-size: 120%;">Drużyny</h3>
+            </div>
+        </div>
+        <div style="width: 255px; border-radius: 8px; background: #1d1d1d; cursor: pointer;" onclick='Toast.show("W budowie")'>
+            <div class="mode-poster" style="height: 300px; background: #fa1616; background: linear-gradient(0deg,rgba(250, 22, 22, 1) 0%, var(--bg-card) 85%); display: flex; justify-content: center; align-items: center; font-size: 500%">
+                🏆
+            </div>
+            <div class="mode-name" style="height: 80px; display: flex; justify-content: center; align-items: center;">
+                <h3 style="font-weight: 500; text-transform: uppercase; letter-spacing: 1px; font-size: 120%;">Nagrody</h3>
+            </div>
         </div>
     </div>
 </div>
