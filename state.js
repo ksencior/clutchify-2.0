@@ -3,7 +3,6 @@ export const AppState = {
 
     setUser(user) {
         this.user = user;
-        console.log(user);
     },
 
     getUser() {

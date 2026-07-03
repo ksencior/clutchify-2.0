@@ -4,6 +4,7 @@ import { AppState } from './state.js';
 
 import { authController } from './controllers/AuthController.js';
 import { setupController } from './controllers/SetupController.js';
+import { teamController } from './controllers/TeamController.js';
 
 window.authController = authController;
 window.setupController = setupController;
@@ -26,7 +27,7 @@ const router = {
 
         const appContainer = document.getElementById('app');
         try {
-            const res = await fetch(`views/${viewName}.html`);
+            const res = await fetch(`views/${viewName}.html?v=${Date.now()}`);
             if (!res.ok) {
                 throw new Error('Nie znaleziono pliku widoku');
             }
@@ -54,9 +55,11 @@ const router = {
     },
     initView: (viewName) => {
         if (viewName === 'teams') {
-            loadTeamsFromApi();
+            teamController.init();
         } else if (viewName === 'setup') {
             setupController.init();
+        } else if (viewName === 'dashboard') {
+            renderPlayerCard();
         }
     }
 };
@@ -103,36 +106,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     router.navigate(defaultView);
 });
 
-async function loadTeamsFromApi() {
-    const listContainer = document.getElementById('teams-list');
-    if (!listContainer) return;
+function renderPlayerCard() {
+    const usernameEl = document.getElementById('dashboard-username');
+    const avatarEl = document.getElementById('dashboard-avatar');
+    const teamEl = document.getElementById('dashboard-team');
 
-    try {
-        const response = await fetch('api.php?action=get_teams');
-        const teams = await response.json();
-
-        if (teams.error) {
-            listContainer.innerHTML = `<p style="color: var(--brand-red);">${teams.error}</p>`;
-            return;
-        }
-
-        if (teams.length === 0) {
-            listContainer.innerHTML = '<p style="color: var(--text-gray);">Brak drużyn w bazie. Bądź pierwszy!</p>';
-            return;
-        }
-
-        listContainer.innerHTML = teams.map(team => `
-            <div class="team-card" style="background: var(--bg-card); padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <span style="background: rgba(255,0,43,0.1); color: var(--brand-red); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-right: 10px;">${team.tag}</span>
-                    <strong style="font-size: 16px;">${team.name}</strong>
-                </div>
-                <button class="nav-btn" style="background: rgba(255,255,255,0.05); padding: 6px 12px; font-size: 11px;" onclick="alert('Aplikujesz do ${team.name}')">Aplikuj</button>
-            </div>
-        `).join('');
-
-    } catch (error) {
-        console.error('Błąd pobierania danych z API:', error);
-        listContainer.innerHTML = '<p style="color: var(--brand-red);">Nie udało się połączyć z API.</p>';
-    }
+    usernameEl.innerText = AppState.isLoggedIn() ? AppState.getUser().username : 'Nowy_Gracz';
+    teamEl.innerText = AppState.getUser().player.team_id !== null? AppState.getUser().player.team_name : "Brak drużyny";
+    avatarEl.src = `https://ui-avatars.com/api/?name=${AppState.isLoggedIn() ? AppState.getUser().username : 'P'}&background=121212&color=ff002b`;
 }
