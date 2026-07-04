@@ -8,7 +8,15 @@ export const setupController = {
         discordConnected: false,
         choice: 'Pominięto'
     },
-    init: () => {
+    init: async () => {
+        await window.authController.checkSession();
+        const res = await fetch('api.php?action=check-for-configuration');
+        const confData = await res.json();
+
+        if (!confData.success || !confData.required) {
+            window.router.navigate('dashboard');
+            return;
+        }
         setupController.currentStep = 1;
         setupController.ensureConnection('steam');
         setupController.ensureConnection('discord');

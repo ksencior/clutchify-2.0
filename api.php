@@ -95,6 +95,81 @@ switch ($action) {
             ]
         ]);
         break;
+    case 'get_notifications':
+        if (!isset($_SESSION['user_id'])) exit;
+        $stmt = $pdo->prepare("SELECT * FROM notifications WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC");
+        $stmt->execute([$_SESSION['user_id']]);
+        $notifs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['success' => true, 'notifications' => $notifs]);
+        break;
+    case 'respond_notification':
+        if (!isset($_SESSION['user_id'])) exit;
+        $input = json_decode(file_get_contents('php://input'), true);
+        $notifId = (int)($input['notification_id'] ?? 0);
+        $action = $input['action'] ?? ''; // 'accept' lub 'reject'
+
+        // Pobierz powiadomienie upewniając się, że należy do usera i jest pending
+        $stmt = $pdo->prepare("SELECT * FROM notifications WHERE id = ? AND user_id = ? AND status = 'pending'");
+        $stmt->execute([$notifId, $_SESSION['user_id']]);
+        $notif = $stmt->fetch();
+
+        if (!$notif) {
+            echo json_encode(['success' => false, 'message' => 'Powiadomienie wygasło lub nie istnieje.']);
+            exit;
+        }
+
+        if ($action === 'reject') {
+            $stmt = $pdo->prepare("UPDATE notifications SET status = 'rejected' WHERE id = ?");
+            $stmt->execute([$notifId]);
+            echo json_encode(['success' => true, 'message' => 'Zaproszenie zostało odrzucone.']);
+            exit;
+        }
+
+        if ($action === 'accept' && $notif['type'] === 'team_invite') {
+            $teamId = $notif['reference_id'];
+            
+            // Jeszcze raz weryfikujemy, czy gracz magicznie nie dołączył do innej drużyny w międzyczasie
+            $stmt = $pdo->prepare("SELECT team_id FROM players WHERE user_id = ?");
+            $stmt->execute([$_SESSION['user_id']]);
+            $player = $stmt->fetch();
+            
+            if ($player['team_id'] !== null) {
+                echo json_encode(['success' => false, 'message' => 'Należysz już do innej drużyny! Najpierw ją opuść.']);
+                exit;
+            }
+
+            // Liczymy limit w drużynie (maks 6)
+            $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM players WHERE team_id = ?");
+            $stmt->execute([$teamId]);
+            $count = $stmt->fetch();
+
+            if ($count['total'] >= 6) {
+                // Jeśli lider spamował zaproszeniami i limit się wyczerpał
+                echo json_encode(['success' => false, 'message' => 'Niestety, skład tej drużyny jest już pełny.']);
+                exit;
+            }
+
+            $isSub = ($count['total'] === 5) ? 1 : 0;
+
+            try {
+                $pdo->beginTransaction();
+                // Dodanie gracza
+                $stmt = $pdo->prepare("UPDATE players SET team_id = ?, is_substitute = ? WHERE user_id = ?");
+                $stmt->execute([$teamId, $isSub, $_SESSION['user_id']]);
+                
+                // Zmiana statusu na accepted
+                $stmt = $pdo->prepare("UPDATE notifications SET status = 'accepted' WHERE id = ?");
+                $stmt->execute([$notifId]);
+                
+                $pdo->commit();
+                echo json_encode(['success' => true, 'message' => 'Dołączyłeś do drużyny!']);
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                echo json_encode(['success' => false, 'message' => 'Wystąpił błąd krytyczny.']);
+            }
+            exit;
+        }
+        break;
     case 'create_team':
         if (!isset($_SESSION['user_id'])) {
             echo json_encode(['success' => false, 'message' => 'Musisz być zalogowany!']);
@@ -131,6 +206,27 @@ switch ($action) {
             echo json_encode(['success' => false, 'message' => 'Nazwa lub Tag drużyny są już zajęte!']);
         }
         break;
+    case 'search_players':
+        if (!isset($_SESSION['user_id'])) exit;
+        $query = $_GET['q'] ?? '';
+        if (strlen($query) < 2) {
+            echo json_encode([]);
+            exit;
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT u.id, u.username, p.avatar 
+            FROM users u 
+            JOIN players p ON u.id = p.user_id 
+            WHERE u.username LIKE ? AND p.team_id IS NULL 
+            LIMIT 5
+        ");
+        
+        $stmt->execute(['%' . $query . '%']);
+        $players = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        echo json_encode($players);
+        break;
     case 'update_team_logo':
         if (!isset($_SESSION['user_id'])) exit;
         $input = json_decode(file_get_contents('php://input'), true);
@@ -150,14 +246,12 @@ switch ($action) {
         }
         break;
 
-    // Dodawanie/Zapraszanie gracza (symulacja bezpośredniego dodania do składu po nicku)
     case 'invite_player':
         if (!isset($_SESSION['user_id'])) exit;
         $input = json_decode(file_get_contents('php://input'), true);
         $targetUsername = trim($input['username'] ?? '');
 
-        // Sprawdzamy czy zlecający to kapitan
-        $stmt = $pdo->prepare("SELECT id FROM teams WHERE captain_id = ?");
+        $stmt = $pdo->prepare("SELECT id, name FROM teams WHERE captain_id = ?");
         $stmt->execute([$_SESSION['user_id']]);
         $team = $stmt->fetch();
 
@@ -166,8 +260,7 @@ switch ($action) {
             exit;
         }
 
-        // Sprawdzamy czy zapraszany gracz istnieje
-        $stmt = $pdo->prepare("SELECT id, team_id FROM users WHERE username = ?");
+        $stmt = $pdo->prepare("SELECT u.id, p.team_id FROM users u JOIN players p ON u.id = p.user_id WHERE username = ?");
         $stmt->execute([$targetUsername]);
         $targetUser = $stmt->fetch();
 
@@ -182,7 +275,7 @@ switch ($action) {
         }
 
         // Sprawdzamy limit miejsc (max 6 w teamie)
-        $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM users WHERE team_id = ?");
+        $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM players WHERE team_id = ?");
         $stmt->execute([$team['id']]);
         $count = $stmt->fetch();
 
@@ -191,13 +284,20 @@ switch ($action) {
             exit;
         }
 
-        // Jeśli to szósty gracz, staje się automatycznie rezerwą
         $isSub = ($count['total'] === 5) ? 1 : 0;
 
-        $stmt = $pdo->prepare("UPDATE users SET team_id = ?, is_sub = ? WHERE id = ?");
-        $stmt->execute([$team['id'], $isSub, $targetUser['id']]);
+        $stmt = $pdo->prepare("SELECT id FROM notifications WHERE user_id = ? AND reference_id = ? AND status = 'pending' AND type = 'team_invite'");
+        $stmt->execute([$targetUser['id'], $team['id']]);
+        if ($stmt->fetch()) {
+            echo json_encode(['success' => false, 'message' => 'Zaproszenie do tego gracza już oczekuje na akceptację!']);
+            exit;
+        }
 
-        echo json_encode(['success' => true, 'message' => "Gracz $targetUsername dołączył do składu!"]);
+        $message = "Zostałeś zaproszony do drużyny <strong>" . htmlspecialchars($team['name']) . "</strong>.";
+        $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, reference_id, message) VALUES (?, 'team_invite', ?, ?)");
+        $stmt->execute([$targetUser['id'], $team['id'], $message]);
+
+        echo json_encode(['success' => true, 'message' => "Zaproszenie zostało wysłane do gracza $targetUsername!"]);
         break;
 
     case 'leave_team':
@@ -256,7 +356,6 @@ switch ($action) {
         }
         echo json_encode(['success' => false, 'message' => "Coś poszło nie tak."]);
         break;
-    // Wyrzucanie gracza ze składu
     case 'kick_player':
         if (!isset($_SESSION['user_id'])) exit;
         $input = json_decode(file_get_contents('php://input'), true);
@@ -276,8 +375,7 @@ switch ($action) {
             exit;
         }
 
-        // Usuwamy gracza z drużyny
-        $stmt = $pdo->prepare("UPDATE users SET team_id = NULL, is_sub = 0 WHERE id = ? AND team_id = ?");
+        $stmt = $pdo->prepare("UPDATE players SET team_id = NULL, is_substitute = 0 WHERE user_id = ? AND team_id = ?");
         $stmt->execute([$targetId, $team['id']]);
 
         echo json_encode(['success' => true, 'message' => 'Gracz został usunięty ze składu.']);

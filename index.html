@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clutchify v2 - Clean SPA</title>
     <link rel="shortcut icon" href="./public/img/clutchify-w-o-text.png" type="image/x-icon">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=123">
     <script>
         const path = window.location.pathname;
         if (path.includes('login') || path.includes('register')) {
@@ -26,11 +26,39 @@
             </nav>
 
             <div class="profile">
-                <button id="nav-profile" class="nav-btn" onclick="authController.handleLogout()">Profil</button>
+                <button id="nav-notifications" class="nav-btn" style="position: relative; padding: 12px; flex-shrink: 0;">
+                    🔔
+                    <span id="notif-badge" style="display: none; position: absolute; top: 5px; right: 5px; background: var(--brand-red); color: white; font-size: 10px; font-weight: bold; padding: 2px 5px; border-radius: 10px;">0</span>
+                </button>
+                <button id="nav-profile" class="nav-btn">Profil</button>
             </div>
         </aside>
         <main id="app"></main>
 
+    </div>
+    <div id="drawer-overlay" class="drawer-overlay"></div>
+    <div id="notification-drawer" class="drawer">
+        <div class="drawer-header">
+            <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                Powiadomienia
+                <span id="drawer-count" style="background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 10px; font-size: 12px;">0</span>
+            </h3>
+            <button id="btn-close-drawer" class="btn-cancel" style="padding: 5px 12px; margin: 0;">&times;</button>
+        </div>
+        <div id="drawer-content" class="drawer-content">
+            <div style="text-align: center; color: var(--text-gray); margin-top: 40px; font-size: 14px;">
+                Brak nowych powiadomień.
+            </div>
+        </div>
+    </div>
+    <div id="pop-menu" class="hidden">
+        <div class="content">
+            <button class="nav-btn" onclick="router.navigate('settings')">Ustawienia konta</button>
+            <button class="nav-btn" onclick="router.navigate('settings')">Przycisk</button>
+            <button class="nav-btn" onclick="router.navigate('settings')">Wyzwania</button>
+            <button class="nav-btn" onclick="router.navigate('settings')">Wsparcie</button>
+            <button class="nav-btn" onclick="authController.handleLogout()" style="margin-top: auto;">Wyloguj się</button>
+        </div>
     </div>
     <div id="popout-overlay">
         <div id="popout-container"></div>

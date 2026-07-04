@@ -163,16 +163,18 @@ export const teamController = {
                     </div>
                 `;
             } else {
+                const cursorStyle = isCurrentUserLider ? 'cursor: pointer;' : '';
+                const hoverClass = isCurrentUserLider ? 'invite-slot' : '';
+
                 grid.innerHTML += `
-                    <div class="player-team-card empty-slot">
+                    <div class="player-team-card empty-slot ${hoverClass}" style="${cursorStyle}" ${isCurrentUserLider ? 'onclick="teamController.openInvitePopout()"' : ''}>
                         <span style="color: rgba(255,255,255,0.15); font-size: 24px; font-weight: 300;">+</span>
-                        <span style="color: var(--text-gray); font-size: 11px; margin-top:5px;">${isSubSlot ? 'Wolna Rezerwa' : 'Wolny Slot'}</span>
+                        <span style="color: var(--text-gray); font-size: 11px; margin-top:5px;">${isSubSlot ? 'Zaproś Rezerwę' : 'Zaproś Gracza'}</span>
                     </div>
                 `;
             }
         }
 
-        // Podpięcie akcji wyrzucania z drużyny pod wygenerowane przyciski
         grid.querySelectorAll('.kick-player-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-id');
@@ -180,7 +182,6 @@ export const teamController = {
             });
         });
 
-        // Kontrola widoczności panelu zarządczego lidera
         const leaderPanel = document.getElementById('leader-panel');
         if (leaderPanel) {
             leaderPanel.style.display = isCurrentUserLider ? 'block' : 'none';
@@ -210,51 +211,103 @@ export const teamController = {
             window.Toast.show('Błąd zapisu logo.', 'error');
         }
     },
+    openInvitePopout: () => {
+        const customHTML = `
+            <h3>Wyszukaj zawodnika</h3>
+            <p style="color: var(--text-gray); font-size: 13px; margin-bottom: 15px;">Wpisz co najmniej 2 znaki, aby wyszukać wolnych agentów.</p>
+            
+            <input type="text" id="popout-search-input" placeholder="Wpisz nick gracza..." style="width: 100%; padding: 12px; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 6px; color: white;">
+            
+            <div id="popout-search-results" class="search-results-container"></div>
+            
+            <button class="btn-cancel" onclick="Popout.close()" style="width: 100%; margin-top: 20px;">Anuluj</button>
+        `;
 
-    invitePlayer: async () => {
-        const name = document.getElementById('invite-player-name').value;
-        if (!name) return window.Toast.show('Wpisz nick gracza!', 'error');
+        window.Popout.create('Zaproś gracza', '', null, null, 'custom', customHTML);
+        const searchInput = document.getElementById('popout-search-input');
 
+        setTimeout(() => {
+            if (searchInput) {
+                 searchInput.focus();
+                 searchInput.addEventListener('input', (e) => {
+                     teamController.handlePlayerSearch(e.target.value);
+                 });
+            }
+        }, 50);
+    },
+    handlePlayerSearch: async (query) => {
+        const resultsContainer = document.getElementById('popout-search-results');
+        if (!resultsContainer) return;
+
+        if (query.length < 2) {
+            resultsContainer.innerHTML = '';
+            return;
+        }
+        try {
+            const response = await fetch(`api.php?action=search_players&q=${encodeURIComponent(query)}`);
+            const players = await response.json();
+
+            if (players.length === 0) {
+                resultsContainer.innerHTML = '<p style="text-align:center; color: var(--text-gray); font-size: 13px; padding: 10px;">Brak wyników lub gracze są już w drużynach.</p>';
+                return;
+            }
+            resultsContainer.innerHTML = players.map(player => {
+                const avatar = player.avatar ? player.avatar : `https://ui-avatars.com/api/?name=${player.username}&background=121212&color=ff002b`;
+                return `
+                    <div class="search-result-item">
+                        <div style="display: flex; align-items: center;">
+                            <img src="${avatar}" alt="Avatar">
+                            <strong>${player.username}</strong>
+                        </div>
+                        <button class="nav-btn active" style="padding: 6px 12px; font-size: 11px;" onclick="teamController.invitePlayer('${player.username}')">Zaproś</button>
+                    </div>
+                `;
+            }).join('');
+        } catch (err) {
+            resultsContainer.innerHTML = '<p style="text-align:center; color: var(--brand-red); font-size: 13px;">Błąd wyszukiwania.</p>';
+        }
+    },
+    invitePlayer: async (username) => {
         try {
             const response = await fetch('api.php?action=invite_player', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: name })
+                body: JSON.stringify({ username: username })
             });
             const data = await response.json();
 
             if (data.success) {
                 window.Toast.show(data.message, 'success');
-                document.getElementById('invite-player-name').value = '';
+                window.Popout.close();
                 await teamController.loadCurrentTeamState();
             } else {
                 window.Toast.show(data.message, 'error');
             }
         } catch (err) {
-            window.Toast.show('Błąd podczas wysyłania zaproszenia.', 'error');
+            window.Toast.show('Błąd podczas wysyłania zaproszenia: ' + err, 'error');
         }
     },
 
     kickPlayer: async (playerId) => {
-        if (!confirm('Czy na pewno chcesz usunąć tego zawodnika ze składu?')) return;
+        window.Popout.create("Potwierdź", "Czy na pewno chcesz usunąć tego gracza ze składu?", null, async () => {
+            try {
+                const response = await fetch('api.php?action=kick_player', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ player_id: playerId })
+                });
+                const data = await response.json();
 
-        try {
-            const response = await fetch('api.php?action=kick_player', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ player_id: playerId })
-            });
-            const data = await response.json();
-
-            if (data.success) {
-                window.Toast.show(data.message, 'info');
-                await teamController.loadCurrentTeamState();
-            } else {
-                window.Toast.show(data.message, 'error');
+                if (data.success) {
+                    window.Toast.show(data.message, 'info');
+                    await teamController.loadCurrentTeamState();
+                } else {
+                    window.Toast.show(data.message, 'error');
+                }
+            } catch (err) {
+                window.Toast.show('Błąd podczas usuwania gracza.', 'error');
             }
-        } catch (err) {
-            window.Toast.show('Błąd podczas usuwania gracza.', 'error');
-        }
+        }, 'confirm');
     },
     leaveTeam: async () => {
         try {
@@ -270,7 +323,7 @@ export const teamController = {
                     }
                     window.Toast.show(delData.message);
                     window.authController.checkSession();
-                    window.router.navigate('dashboard');
+                    await teamController.loadCurrentTeamState();
                 }, 'confirm');
             } else if (data.success && !data.action) {
                 window.Toast.show(data.message);

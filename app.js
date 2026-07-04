@@ -6,9 +6,46 @@ import { authController } from './controllers/AuthController.js';
 import { setupController } from './controllers/SetupController.js';
 import { teamController } from './controllers/TeamController.js';
 import { dashboardController } from './controllers/DashboardController.js';
+import { notificationController } from './controllers/NotificationController.js';
 
 window.authController = authController;
 window.setupController = setupController;
+
+const ViewSkeletons = {
+    dashboard: `
+        <div style="padding: 20px;">
+            <div style="height: 300px; display: flex; justify-content: space-between; align-items: center;">
+                <div class="skeleton-box" style="height: 40px; width: 30%;"></div>
+                <div class="skeleton-box" style="width: 400px; height: 160px; border-radius: 16px;"></div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                <div class="skeleton-box" style="height: 380px; border-radius: 12px;"></div>
+                <div class="skeleton-box" style="height: 380px; border-radius: 12px;"></div>
+                <div class="skeleton-box" style="height: 380px; border-radius: 12px;"></div>
+            </div>
+        </div>
+    `,
+    teams: `
+        <div style="padding: 20px; max-width: 800px; margin: 40px auto;">
+            <div style="text-align: center; margin-bottom: 40px;">
+                <div class="skeleton-box" style="height: 45px; width: 250px; margin: 0 auto 15px auto;"></div>
+                <div class="skeleton-box" style="height: 15px; width: 400px; margin: 0 auto;"></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 600px; margin: 0 auto;">
+                <div class="skeleton-box" style="height: 130px; border-radius: 12px;"></div>
+                <div class="skeleton-box" style="height: 130px; border-radius: 12px;"></div>
+            </div>
+        </div>
+    `,
+    // Fallback - uniwersalny szablon dla stron, które nie mają swojego specyficznego
+    default: `
+        <div style="padding: 40px; max-width: 800px; margin: 0 auto;">
+            <div class="skeleton-box" style="height: 40px; width: 40%; margin-bottom: 30px;"></div>
+            <div class="skeleton-box" style="height: 200px; border-radius: 12px; margin-bottom: 20px;"></div>
+            <div class="skeleton-box" style="height: 200px; border-radius: 12px;"></div>
+        </div>
+    `
+};
 
 const router = {
     navigate: async (viewName, updateUrl = true) => {
@@ -29,8 +66,10 @@ const router = {
         authController.checkSession();
 
         const appContainer = document.getElementById('app');
+        appContainer.innerHTML = ViewSkeletons[viewName] || ViewSkeletons.default;
         try {
             const res = await fetch(`views/${viewName}.html?v=${Date.now()}`);
+            //await new Promise(resolve => setTimeout(resolve, 150));
             if (!res.ok) {
                 throw new Error('Nie znaleziono pliku widoku');
             }
@@ -180,13 +219,72 @@ window.onpopstate = (event) => {
         router.navigate('dashboard', false);
     }
 };
-
 document.addEventListener('DOMContentLoaded', async () => {
 
     await authController.checkSession();
+
+    if (AppState.isLoggedIn()) {
+        notificationController.init();
+    }
     
     const currentPath = window.location.pathname.replace('/', ''); 
     const defaultView = currentPath ? currentPath : 'dashboard';
     
     router.navigate(defaultView);
+
+    const menuEl = document.getElementById('pop-menu');
+    const menuBtn = document.getElementById('nav-profile');
+    menuBtn.addEventListener('click', () => {
+        if (!menuEl) return;
+
+        const isHidden = menuEl.classList.contains('hidden');
+
+        if (isHidden) {
+            menuEl.style.display = 'block';
+
+            requestAnimationFrame(() => {
+                menuEl.classList.remove('hidden');
+            });
+        } else {
+            menuEl.classList.add('hidden');
+
+            menuEl.addEventListener('transitionend', () => {
+                menuEl.style.display = 'none';
+            }, { once: true });
+        }
+    });
+    menuEl.addEventListener('click', (e) => {
+        if (e.target.closest('button, a')) {
+            menuEl.classList.add('hidden');
+        }
+    });
+    document.addEventListener('click', (e) => {
+        if (menuEl.classList.contains('hidden')) return;
+        if (menuBtn.contains(e.target)) return;
+        if (menuEl.contains(e.target)) return;
+
+        menuEl.classList.add('hidden');
+    });
+
+    const notifBtn = document.getElementById('nav-notifications');
+    const drawer = document.getElementById('notification-drawer');
+    const drawerOverlay = document.getElementById('drawer-overlay');
+    const closeDrawerBtn = document.getElementById('btn-close-drawer');
+
+    const toggleDrawer = (forceState) => {
+        const isOpen = drawer.classList.contains('open');
+        const newState = forceState !== undefined ? forceState : !isOpen;
+
+        if (newState) {
+            drawer.classList.add('open');
+            drawerOverlay.classList.add('active');
+        } else {
+            drawer.classList.remove('open');
+            drawerOverlay.classList.remove('active');
+        }
+    }
+
+    if (notifBtn) notifBtn.addEventListener('click', () => toggleDrawer(true));
+    if (closeDrawerBtn) closeDrawerBtn.addEventListener('click', () => toggleDrawer(false));
+    if (drawerOverlay) drawerOverlay.addEventListener('click', () => toggleDrawer(false));
 });
