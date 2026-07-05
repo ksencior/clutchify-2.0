@@ -1,0 +1,71 @@
+<div class="tournament-detail-container tournament-detail-page">
+    <div class="tournament-detail-hero">
+        <span id="t-view-status" class="tournament-detail-status">STATUS</span>
+
+        <div>
+            <span class="eyebrow">Clutchify tournament</span>
+            <h1 id="t-view-title">Ładowanie...</h1>
+            <p>Organizator: <span id="t-view-creator">-</span></p>
+        </div>
+    </div>
+
+    <div class="tournament-detail-grid">
+        <section class="tournament-detail-card">
+            <div class="tournament-section-heading">
+                <div>
+                    <h2>Zapisane drużyny</h2>
+                    <p>Lista zaakceptowanych drużyn oraz zgłoszeń oczekujących na weryfikację.</p>
+                </div>
+            </div>
+
+            <div id="t-view-participants" class="tournament-participants-list">
+                <div class="empty-state">Nikt jeszcze nie dołączył do tego starcia.</div>
+            </div>
+        </section>
+
+        <aside class="tournament-detail-side">
+            <section class="tournament-detail-card">
+                <button class="nav-btn active" id="btn-join-tournament">
+                    Zapisz swoją drużynę
+                </button>
+
+                <p id="t-view-join-hint" class="tournament-join-hint"></p>
+
+                <div class="tournament-info-list">
+                    <div>
+                        <span>Koniec zapisów:</span>
+                        <strong id="t-view-sign-ends">-</strong>
+                    </div>
+
+                    <div>
+                        <span>Start rozgrywek:</span>
+                        <strong id="t-view-starts-at">-</strong>
+                    </div>
+
+                    <div>
+                        <span>Wpisowe:</span>
+                        <strong class="red-text">DARMOWE</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section id="t-view-admin-box" class="tournament-detail-card hidden">
+                <span class="eyebrow">Panel admina</span>
+
+                <div id="t-view-admin-status" class="tournament-admin-status"></div>
+
+                <div id="t-view-admin-controls" class="tournament-admin-controls"></div>
+
+                <div id="t-view-join-code-box" class="tournament-join-code-box hidden">
+                    <h3>Kod dołączenia</h3>
+
+                    <code id="t-view-join-code" class="tournament-join-code">-</code>
+
+                    <p class="tournament-join-hint">
+                        Udostępnij ten kod tylko kapitanom. Sam kod tworzy zgłoszenie, ale nie akceptuje drużyny automatycznie.
+                    </p>
+                </div>
+            </section>
+        </aside>
+    </div>
+</div>

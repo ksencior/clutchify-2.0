@@ -1,0 +1,32 @@
+<div class="tournaments-page">
+    <header class="tournaments-hero">
+        <div>
+            <span class="eyebrow">Clutchify events</span>
+            <h1>Odkryj <span class="red-text">turnieje</span></h1>
+            <p>
+                Otwarte zapisy, prywatne eventy na kod i przestrzeń dla ekip,
+                które chcą grać o coś więcej niż ranking.
+            </p>
+        </div>
+
+        <div class="tournaments-hero-actions">
+            <button
+                id="join-closed-tournament"
+                class="btn-ok"
+                onclick="window.tournamentController.showJoin()"
+            >
+                Dołącz kodem
+            </button>
+
+            <button
+                id="create-tournament"
+                class="btn-confirm"
+                onclick="window.tournamentController.showCreation()"
+            >
+                Utwórz
+            </button>
+        </div>
+    </header>
+
+    <div id="tournaments-container" class="tournaments-list"></div>
+</div>

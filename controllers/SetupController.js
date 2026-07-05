@@ -60,7 +60,7 @@ export const setupController = {
         if (provider === 'steam') {
             window.location.href = '/services/connect_steam.php';
         } else if (provider === 'discord') {
-            window.location.href = 'https://discord.com/oauth2/authorize?client_id=1522618604934271017&response_type=code&redirect_uri=http%3A%2F%2Fclutchify.test%2Fservices%2Fconnect_discord.php&scope=identify';
+            window.location.href = '/services/connect_discord.php';
         }
     },
 
@@ -69,7 +69,7 @@ export const setupController = {
         btn.innerText = 'Łączenie...';
         btn.style.opacity = '0.5';
 
-        const response = await fetch('api.php?action=ensure_connection', {
+        const response = await window.apiFetch('api.php?action=ensure_connection', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ provider: provider })
@@ -94,15 +94,14 @@ export const setupController = {
     },
 
     selectChoice: (type, element) => {
-        // Usuwamy podświetlenie ze wszystkich
         document.querySelectorAll('.choice-card').forEach(el => el.classList.remove('selected'));
-        // Dodajemy do klikniętego
+
         element.classList.add('selected');
-        
+
         if (type === 'create') {
-            setupController.setupData.choice == 'create';
+            setupController.setupData.choice = 'create';
         } else {
-            setupController.setupData.choice == 'lft';
+            setupController.setupData.choice = 'lft';
         }
     },
 

@@ -1,0 +1,125 @@
+<div class="profile-view-container" style="max-width: 1000px; margin: 0 auto; animation: fadeIn 0.4s ease forwards; padding-bottom: 40px;">
+    
+    <div style="position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--border-color); background: var(--bg-card); box-shadow: 0 10px 30px rgba(0,0,0,0.4);">
+        
+        <div style="height: 220px; background: linear-gradient(135deg, rgba(255,0,43,0.2) 0%, var(--bg-dark) 100%), url('https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070&auto=format&fit=crop') center/cover; position: relative;">
+            <div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; background: linear-gradient(to top, var(--bg-card), transparent);"></div>
+        </div>
+
+        <div style="display: flex; align-items: flex-end; gap: 25px; padding: 0 40px 30px 40px; margin-top: -70px; position: relative; z-index: 2;">
+            
+            <div style="position: relative; flex-shrink: 0;">
+                <img id="p-view-avatar" src="" style="width: 150px; height: 150px; border-radius: 20px; border: 4px solid var(--bg-card); box-shadow: 0 5px 20px rgba(255,0,43,0.15); object-fit: cover; background: var(--bg-dark);">
+                <div id="p-current-status" style="position: absolute; bottom: -2px; right: -2px; width: 22px; height: 22px; background: #333333; border: 4px solid var(--bg-card); border-radius: 50%;" title="Online"></div>
+            </div>
+            
+            <div style="flex-grow: 1; padding-bottom: 5px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px;">
+                    <div>
+                        <div id="p-view-team-section" style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                            </div>
+                        <h1 id="p-view-username" style="margin: 0; font-size: 38px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; text-shadow: 0 4px 10px rgba(0,0,0,0.5);">-</h1>
+                        <p style="color: var(--text-gray); font-size: 14px; margin-top: 5px;">
+                            Członek od <span id="p-view-created-at">-</span> • 🌍 <span id="p-view-region">EU</span>
+                        </p>
+                    </div>
+                    
+                    <div id="p-view-actions" style="display: flex; gap: 10px; margin-top: 10px;">
+                        </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 25px; margin-top: 25px;">
+        
+        <div style="display: flex; flex-direction: column; gap: 25px;">
+            <div style="background: var(--bg-card); padding: 25px; border-radius: 16px; border: 1px solid var(--border-color);">
+                <h3 style="margin-bottom: 20px; font-size: 16px; display: flex; align-items: center; gap: 10px;">
+                    <span style="color: var(--brand-red); font-size: 12px;">■</span> Połączone konta
+                </h3>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-dark); padding: 12px 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
+                        <span style="color: var(--text-gray); font-size: 13px;">Steam</span>
+                        <strong id="p-view-steam" style="font-size: 13px; color: #fff;">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-dark); padding: 12px 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
+                        <span style="color: var(--text-gray); font-size: 13px;">Discord</span>
+                        <strong id="p-view-discord" style="font-size: 13px; color: #fff;">-</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: var(--bg-card); padding: 25px; border-radius: 16px; border: 1px solid var(--border-color);">
+                <h3 style="margin-bottom: 15px; font-size: 16px; display: flex; align-items: center; gap: 10px;">
+                    <span style="color: var(--brand-red); font-size: 12px;">■</span> O Mnie
+                </h3>
+                <p id="p-view-bio" style="color: var(--text-gray); font-size: 13px; line-height: 1.6;">
+                    Ten gracz nie dodał jeszcze opisu profilu.
+                </p>
+            </div>
+            <div style="background: var(--bg-card); padding: 25px; border-radius: 16px; border: 1px solid var(--border-color);">
+                <h3 style="margin-bottom: 15px; font-size: 16px; display: flex; align-items: center; gap: 10px;">
+                    <span style="color: var(--brand-red); font-size: 12px;">■</span> Informacje gracza
+                </h3>
+
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; justify-content: space-between; gap: 12px; background: var(--bg-dark); padding: 12px 15px; border-radius: 8px;">
+                        <span style="color: var(--text-gray); font-size: 13px;">Rola</span>
+                        <strong id="p-view-role" style="font-size: 13px;">-</strong>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; gap: 12px; background: var(--bg-dark); padding: 12px 15px; border-radius: 8px;">
+                        <span style="color: var(--text-gray); font-size: 13px;">Faceit</span>
+                        <strong id="p-view-faceit" style="font-size: 13px;">-</strong>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; gap: 12px; background: var(--bg-dark); padding: 12px 15px; border-radius: 8px;">
+                        <span style="color: var(--text-gray); font-size: 13px;">Szkoła / org.</span>
+                        <strong id="p-view-school" style="font-size: 13px; text-align: right;">-</strong>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 6px; background: var(--bg-dark); padding: 12px 15px; border-radius: 8px;">
+                        <span style="color: var(--text-gray); font-size: 13px;">Dostępność</span>
+                        <strong id="p-view-availability" style="font-size: 13px;">-</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 25px;">
+            
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                <div style="background: var(--bg-card); padding: 25px; border-radius: 16px; border: 1px solid var(--border-color); text-align: center;">
+                    <span style="color: var(--text-gray); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">Turnieje</span>
+                    <div style="font-size: 28px; font-weight: 800; color: #fff; margin-top: 8px;">0</div>
+                </div>
+                <div style="background: var(--bg-card); padding: 25px; border-radius: 16px; border: 1px solid var(--border-color); text-align: center;">
+                    <span style="color: var(--text-gray); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">Win Rate</span>
+                    <div style="font-size: 28px; font-weight: 800; color: #00E676; margin-top: 8px;">0%</div>
+                </div>
+                <div style="background: var(--bg-card); padding: 25px; border-radius: 16px; border: 1px solid var(--border-color); text-align: center; position: relative; overflow: hidden;">
+                    <div style="position: absolute; top: -20px; right: -20px; width: 60px; height: 60px; background: var(--brand-red); opacity: 0.15; filter: blur(20px);"></div>
+                    <span style="color: var(--text-gray); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">MVP</span>
+                    <div style="font-size: 28px; font-weight: 800; color: var(--brand-red); margin-top: 8px;">0</div>
+                </div>
+            </div>
+
+            <div style="background: var(--bg-card); padding: 25px; border-radius: 16px; border: 1px solid var(--border-color); flex-grow: 1;">
+                <h3 style="margin-bottom: 25px; font-size: 16px; display: flex; align-items: center; gap: 10px;">
+                    <span style="color: var(--brand-red); font-size: 12px;">■</span> Trofea i Odznaki
+                </h3>
+                
+                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                    <div style="width: 70px; height: 70px; background: var(--bg-dark); border: 1px dashed rgba(255,255,255,0.1); border-radius: 12px; display: flex; justify-content: center; align-items: center; color: var(--text-gray); font-size: 11px; cursor: default;">
+                        Puste
+                    </div>
+                    <div style="width: 70px; height: 70px; background: var(--bg-dark); border: 1px dashed rgba(255,255,255,0.1); border-radius: 12px; display: flex; justify-content: center; align-items: center; color: var(--text-gray); font-size: 11px; cursor: default;">
+                        Puste
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>

@@ -1,0 +1,94 @@
+<div class="admin-page">
+    <header class="admin-hero">
+        <div>
+            <span class="eyebrow">Centrum admina</span>
+            <h1>Panel <span class="red-text">administracyjny</span></h1>
+            <p>Podgląd kondycji platformy, najnowszych użytkowników, turniejów i zgłoszeń.</p>
+        </div>
+
+        <div class="admin-hero-actions">
+            <button class="btn-ok" onclick="router.navigate('tournaments')">
+                Turnieje
+            </button>
+
+            <button class="btn-confirm" onclick="router.navigate('dashboard')">
+                Dashboard
+            </button>
+        </div>
+    </header>
+
+    <section id="admin-stats" class="admin-stats-grid">
+        <div class="empty-state">Ładowanie statystyk...</div>
+    </section>
+
+    <section class="admin-grid">
+        <article class="admin-card admin-card-wide">
+            <div class="admin-card-header">
+                <div>
+                    <span class="eyebrow">Wymaga akcji</span>
+                    <h2>Oczekujące zgłoszenia</h2>
+                </div>
+            </div>
+
+            <div id="admin-pending-requests" class="admin-list">
+                <div class="empty-state">Ładowanie...</div>
+            </div>
+        </article>
+
+        <article class="admin-card">
+            <div class="admin-card-header">
+                <div>
+                    <span class="eyebrow">Nowi gracze</span>
+                    <h2>Użytkownicy</h2>
+                </div>
+            </div>
+
+            <div id="admin-latest-users" class="admin-list">
+                <div class="empty-state">Ładowanie...</div>
+            </div>
+        </article>
+
+        <article class="admin-card">
+            <div class="admin-card-header">
+                <div>
+                    <span class="eyebrow">Organizacja</span>
+                    <h2>Drużyny</h2>
+                </div>
+            </div>
+
+            <div id="admin-latest-teams" class="admin-list">
+                <div class="empty-state">Ładowanie...</div>
+            </div>
+        </article>
+
+        <article class="admin-card">
+            <div class="admin-card-header">
+                <div>
+                    <span class="eyebrow">Eventy</span>
+                    <h2>Turnieje</h2>
+                </div>
+
+                <button class="btn-ok compact" onclick="router.navigate('tournaments')">
+                    Wszystkie
+                </button>
+            </div>
+
+            <div id="admin-latest-tournaments" class="admin-list">
+                <div class="empty-state">Ładowanie...</div>
+            </div>
+        </article>
+
+        <article class="admin-card">
+            <div class="admin-card-header">
+                <div>
+                    <span class="eyebrow">Log</span>
+                    <h2>Aktywność</h2>
+                </div>
+            </div>
+
+            <div id="admin-latest-activity" class="admin-list">
+                <div class="empty-state">Ładowanie...</div>
+            </div>
+        </article>
+    </section>
+</div>

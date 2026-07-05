@@ -1,0 +1,172 @@
+<div class="settings-page">
+    <header class="settings-hero">
+        <div>
+            <span class="eyebrow">Ustawienia konta</span>
+            <h1>Edytuj swój <span class="red-text">profil</span></h1>
+            <p>Uzupełnij informacje, które będą widoczne dla innych graczy i organizatorów.</p>
+        </div>
+
+        <button class="btn-ok" onclick="router.navigate('profile')">
+            Zobacz profil
+        </button>
+    </header>
+
+    <div class="settings-grid">
+        <section class="settings-card">
+            <h2>Informacje publiczne</h2>
+            <p class="settings-muted">Te dane pojawią się na Twoim profilu.</p>
+
+            <form id="settings-profile-form" class="settings-form">
+                <label>
+                    Nick
+                    <input
+                        id="settings-username"
+                        data-settings-preview
+                        type="text"
+                        maxlength="24"
+                        placeholder="Twój nick"
+                    >
+                    <small>3-24 znaki: litery, cyfry, _, . oraz -</small>
+                </label>
+
+                <label>
+                    Link do avatara
+                    <input
+                        id="settings-avatar"
+                        data-settings-preview
+                        type="url"
+                        maxlength="255"
+                        placeholder="https://..."
+                    >
+                    <small>Na razie avatar jako URL. Upload plików zrobimy później.</small>
+                </label>
+
+                <label>
+                    Bio
+                    <textarea
+                        id="settings-bio"
+                        data-settings-preview
+                        maxlength="500"
+                        placeholder="Napisz coś o sobie..."
+                    ></textarea>
+                    <small>Maksymalnie 500 znaków.</small>
+                </label>
+
+                <div class="settings-form-row">
+                    <label>
+                        Rola w CS
+                        <select id="settings-role" data-settings-preview>
+                            <option value="unknown">Nie ustawiono</option>
+                            <option value="entry">Entry Fragger</option>
+                            <option value="rifler">Rifler</option>
+                            <option value="awper">AWPer</option>
+                            <option value="igl">IGL</option>
+                            <option value="lurker">Lurker</option>
+                            <option value="support">Support</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Faceit level
+                        <input
+                            id="settings-faceit"
+                            data-settings-preview
+                            type="number"
+                            min="1"
+                            max="10"
+                            placeholder="1-10"
+                        >
+                    </label>
+                </div>
+
+                <div class="settings-form-row">
+                    <label>
+                        Region
+                        <input
+                            id="settings-region"
+                            data-settings-preview
+                            type="text"
+                            maxlength="40"
+                            placeholder="EU / PL / Kuj-Pom..."
+                        >
+                    </label>
+
+                    <label>
+                        Szkoła / organizacja
+                        <input
+                            id="settings-school"
+                            data-settings-preview
+                            type="text"
+                            maxlength="120"
+                            placeholder="np. ZSN Gąsawa"
+                        >
+                    </label>
+                </div>
+
+                <label>
+                    Dostępność
+                    <input
+                        id="settings-availability"
+                        data-settings-preview
+                        type="text"
+                        maxlength="255"
+                        placeholder="np. pon-pt po 18:00, weekendy cały dzień"
+                    >
+                </label>
+
+                <button class="btn-confirm" type="submit">
+                    Zapisz profil
+                </button>
+            </form>
+        </section>
+
+        <aside class="settings-side">
+            <section class="settings-card">
+                <h2>Podgląd profilu</h2>
+
+                <div class="settings-preview">
+                    <img id="settings-preview-avatar" src="" alt="Avatar">
+
+                    <div>
+                        <h3 id="settings-preview-username">-</h3>
+                        <span id="settings-preview-role">Nie ustawiono</span>
+                    </div>
+
+                    <p id="settings-preview-bio">Brak opisu profilu.</p>
+
+                    <div class="settings-preview-tags">
+                        <span id="settings-preview-faceit">Faceit -</span>
+                        <span id="settings-preview-region">EU</span>
+                    </div>
+
+                    <div class="settings-preview-info">
+                        <strong>Szkoła / organizacja</strong>
+                        <span id="settings-preview-school">Brak szkoły / organizacji</span>
+                    </div>
+
+                    <div class="settings-preview-info">
+                        <strong>Dostępność</strong>
+                        <span id="settings-preview-availability">Brak informacji o dostępności</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="settings-card">
+                <h2>Połączone konta</h2>
+                <p class="settings-muted">Steam i Discord edytujemy przez ponowne połączenie konta.</p>
+
+                <div class="settings-linked-list">
+                    <div>
+                        <span>Steam</span>
+                        <strong id="settings-steam">-</strong>
+                    </div>
+
+                    <div>
+                        <span>Discord</span>
+                        <strong id="settings-discord">-</strong>
+                    </div>
+                </div>
+            </section>
+        </aside>
+    </div>
+</div>

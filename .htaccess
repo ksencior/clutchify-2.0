@@ -1,12 +1,12 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    RewriteBase /
+    RewriteRule ^index\.html$ - [L]
     
-    # Jeśli żądany adres to istniejący plik (np. style.css, app.js, api.php), otwórz go normalnie
     RewriteCond %{REQUEST_FILENAME} -f [OR]
-    # Jeśli żądany adres to istniejący folder, otwórz go normalnie
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
     # W każdym innym przypadku (np. /teams, /dashboard) przekieruj ruch po cichu na index.html
-    RewriteRule ^ index.html [L]
+    RewriteRule ^ index.html [L,QSA]
 </IfModule>

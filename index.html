@@ -23,12 +23,23 @@
                 <button class="nav-btn active" onclick="router.navigate('dashboard')">Panel Główny</button>
                 <button class="nav-btn" onclick="router.navigate('teams')">Drużyny</button>
                 <button class="nav-btn" onclick="router.navigate('tournaments')">Turnieje</button>
+                <button class="nav-btn" onclick="router.navigate('friends')">Znajomi i czat</button>
+
+                <button class="nav-btn admin-only" onclick="router.navigate('admin')" style="display: none;">
+                    Centrum admina
+                </button>
             </nav>
 
             <div class="profile">
-                <button id="nav-notifications" class="nav-btn" style="position: relative; padding: 12px; flex-shrink: 0;">
-                    🔔
-                    <span id="notif-badge" style="display: none; position: absolute; top: 5px; right: 5px; background: var(--brand-red); color: white; font-size: 10px; font-weight: bold; padding: 2px 5px; border-radius: 10px;">0</span>
+                <button id="nav-notifications" class="notification-sidebar-card" type="button">
+                    <span class="notification-icon">🔔</span>
+
+                    <span class="notification-text">
+                        <strong>Powiadomienia</strong>
+                        <small>Kliknij, aby otworzyć</small>
+                    </span>
+
+                    <span id="notif-badge" class="notification-badge" style="display: none;">0</span>
                 </button>
                 <button id="nav-profile" class="nav-btn">Profil</button>
             </div>
@@ -45,18 +56,37 @@
             </h3>
             <button id="btn-close-drawer" class="btn-cancel" style="padding: 5px 12px; margin: 0;">&times;</button>
         </div>
+        <div class="activity-tabs">
+            <button
+                id="activity-tab-notifications"
+                class="activity-tab active"
+                onclick="notificationController.switchTab('notifications')"
+                type="button"
+            >
+                Powiadomienia
+                <span id="activity-notifications-count">0</span>
+            </button>
+
+            <button
+                id="activity-tab-messages"
+                class="activity-tab"
+                onclick="notificationController.switchTab('messages')"
+                type="button"
+            >
+                Wiadomości
+                <span id="activity-messages-count">0</span>
+            </button>
+        </div>
         <div id="drawer-content" class="drawer-content">
             <div style="text-align: center; color: var(--text-gray); margin-top: 40px; font-size: 14px;">
                 Brak nowych powiadomień.
             </div>
         </div>
     </div>
-    <div id="pop-menu" class="hidden">
+    <div id="pop-menu" class="is-closed" aria-hidden="true">
         <div class="content">
+            <button class="nav-btn" onclick="router.navigate('profile')">Twój profil</button>
             <button class="nav-btn" onclick="router.navigate('settings')">Ustawienia konta</button>
-            <button class="nav-btn" onclick="router.navigate('settings')">Przycisk</button>
-            <button class="nav-btn" onclick="router.navigate('settings')">Wyzwania</button>
-            <button class="nav-btn" onclick="router.navigate('settings')">Wsparcie</button>
             <button class="nav-btn" onclick="authController.handleLogout()" style="margin-top: auto;">Wyloguj się</button>
         </div>
     </div>

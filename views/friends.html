@@ -1,0 +1,62 @@
+<div class="friends-page">
+    <section class="friends-sidebar-card">
+        <div class="friends-header">
+            <div>
+                <h1>Znajomi</h1>
+                <p>Dodawaj graczy i pisz prywatne wiadomości.</p>
+            </div>
+
+            <button class="btn-ok compact" onclick="Sound.toggle()" data-sound-state>
+                Dźwięk: ON
+            </button>
+        </div>
+
+        <div class="friend-search-box">
+            <input id="friend-search-input" type="text" placeholder="Szukaj gracza...">
+
+            <div id="friend-search-results" class="friend-search-results">
+                <div class="empty-state small">Wpisz minimum 2 znaki.</div>
+            </div>
+        </div>
+
+        <div class="friends-section-title">
+            <span>Zaproszenia</span>
+            <strong id="friend-requests-badge">0</strong>
+        </div>
+
+        <div id="friend-requests" class="friend-requests"></div>
+
+        <div class="friends-section-title">
+            <span>Lista znajomych</span>
+        </div>
+
+        <div id="friends-list" class="friends-list"></div>
+    </section>
+
+    <section class="chat-card">
+        <div class="chat-header">
+            <div>
+                <span>Rozmowa</span>
+                <h2 id="chat-title">Wybierz znajomego</h2>
+            </div>
+        </div>
+
+        <div id="chat-empty-hint" class="empty-state chat-empty">
+            Wybierz znajomego z listy po lewej, żeby zacząć pisać.
+        </div>
+
+        <div id="chat-messages" class="chat-messages"></div>
+
+        <form id="chat-form" class="chat-form hidden">
+            <input
+                id="chat-message-input"
+                type="text"
+                maxlength="1000"
+                placeholder="Napisz wiadomość..."
+                autocomplete="off"
+            >
+
+            <button class="btn-confirm" type="submit">Wyślij</button>
+        </form>
+    </section>
+</div>

@@ -108,7 +108,7 @@ export const teamController = {
         const isOpen = document.getElementById('team-is-open').checked;
 
         try {
-            const response = await fetch('api.php?action=create_team', {
+            const response = await window.apiFetch('api.php?action=create_team', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, tag, is_open: isOpen })
@@ -193,7 +193,7 @@ export const teamController = {
         if (!url) return window.Toast.show('Wprowadź link URL!', 'error');
 
         try {
-            const response = await fetch('api.php?action=update_team_logo', {
+            const response = await window.apiFetch('api.php?action=update_team_logo', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ logo: url })
@@ -269,7 +269,7 @@ export const teamController = {
     },
     invitePlayer: async (username) => {
         try {
-            const response = await fetch('api.php?action=invite_player', {
+            const response = await window.apiFetch('api.php?action=invite_player', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: username })
@@ -279,6 +279,13 @@ export const teamController = {
             if (data.success) {
                 window.Toast.show(data.message, 'success');
                 window.Popout.close();
+                const targetUserId = data.targetId;
+                if (window.wsClient && window.wsClient.readyState === WebSocket.OPEN) {
+                    window.wsClient.send(JSON.stringify({
+                        type: 'notify',
+                        targetId: targetUserId // ID gracza, którego szturchamy
+                    }));
+                }
                 await teamController.loadCurrentTeamState();
             } else {
                 window.Toast.show(data.message, 'error');
@@ -291,7 +298,7 @@ export const teamController = {
     kickPlayer: async (playerId) => {
         window.Popout.create("Potwierdź", "Czy na pewno chcesz usunąć tego gracza ze składu?", null, async () => {
             try {
-                const response = await fetch('api.php?action=kick_player', {
+                const response = await window.apiFetch('api.php?action=kick_player', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ player_id: playerId })
@@ -311,11 +318,15 @@ export const teamController = {
     },
     leaveTeam: async () => {
         try {
-            const response = await fetch('api.php?action=leave_team');
+            const response = await window.apiFetch('api.php?action=leave_team', {
+                method: 'POST'
+            });
             const data = await response.json();
             if (data.success && data.action && data.action === 'popout') {
                 window.Popout.create('Potwierdź akcję', 'Wychodząc jako ostatni członek drużyny, jednocześnie usuwasz ją całą. Potwierdź akcję, jeśli chcesz usunąć drużynę.', null, async () => {
-                    const delResponse = await fetch('api.php?action=delete_team');
+                    const delResponse = await window.apiFetch('api.php?action=delete_team', {
+                        method: 'POST'
+                    });
                     const delData = await delResponse.json();
                     if (!delData.success) {
                         window.Toast.show(delData.message, 'error');

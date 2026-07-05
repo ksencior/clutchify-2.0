@@ -34,4 +34,32 @@
             </div>
         </div>
     </div>
+    <section class="dashboard-activity-zone">
+        <div class="zone-heading">
+            <div>
+                <span class="eyebrow">Aktywność</span>
+                <h2>Co dzieje się na <span class="red-text">Clutchify</span></h2>
+                <p>Ostatnie akcje graczy, drużyn i organizatorów.</p>
+            </div>
+        </div>
+
+        <div id="dashboard-activity-feed" class="dashboard-activity-feed">
+            <div class="empty-state">Ładowanie aktywności...</div>
+        </div>
+    </section>
+    <section class="dashboard-tournament-zone">
+        <div class="zone-heading">
+            <div>
+                <span class="eyebrow">Strefa turniejowa</span>
+                <h2>Nadchodzące <span class="red-text">turnieje</span></h2>
+                <p>Sprawdź aktywne zapisy i wskakuj do rywalizacji.</p>
+            </div>
+
+            <button class="btn-ok" onclick="router.navigate('tournaments')">
+                Zobacz wszystkie
+            </button>
+        </div>
+
+        <div id="upcoming-tournaments" class="dashboard-tournaments-grid"></div>
+    </section>
 </div>

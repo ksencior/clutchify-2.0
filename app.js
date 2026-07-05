@@ -7,9 +7,235 @@ import { setupController } from './controllers/SetupController.js';
 import { teamController } from './controllers/TeamController.js';
 import { dashboardController } from './controllers/DashboardController.js';
 import { notificationController } from './controllers/NotificationController.js';
+import { tournamentController } from './controllers/TournamentsController.js';
+import { tournamentViewController } from './controllers/TournamentViewController.js';
+import { profileController } from './controllers/ProfileController.js';
+import { friendsController } from './controllers/FriendsController.js';
+import { settingsController } from './controllers/SettingsController.js';
+import { adminController } from './controllers/AdminController.js';
 
 window.authController = authController;
 window.setupController = setupController;
+window.friendsController = friendsController;
+window.settingsController = settingsController;
+window.adminController = adminController;
+
+window.wsClient = null;
+window.onlineUsers = new Set();
+window.escapeHTML = (value = '') => String(value).replace(/[&<>'"]/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#039;',
+    '"': '&quot;'
+}[char]));
+
+window.apiFetch = async (url, options = {}) => {
+    const headers = new Headers(options.headers || {});
+
+    const method = (options.method || 'GET').toUpperCase();
+
+    if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) {
+        headers.set('Content-Type', 'application/json');
+    }
+
+    const csrfToken = AppState.getCsrfToken?.();
+
+    if (csrfToken) {
+        headers.set('X-CSRF-Token', csrfToken);
+    }
+
+    const response = await fetch(url, {
+        ...options,
+        method,
+        headers
+    });
+
+    if (response.status === 403) {
+        let data = null;
+
+        try {
+            data = await response.clone().json();
+        } catch (_) {}
+
+        window.Toast?.show(
+            data?.message || 'Sesja bezpieczeństwa wygasła. Odśwież stronę.',
+            'error'
+        );
+    }
+
+    return response;
+}
+
+window.Sound = {
+    enabled: localStorage.getItem('notifySoundEnabled') !== 'false',
+    audioContext: null,
+
+    toggle() {
+        this.enabled = !this.enabled;
+        localStorage.setItem('notifySoundEnabled', this.enabled ? 'true' : 'false');
+
+        document.querySelectorAll('[data-sound-state]').forEach(el => {
+            el.textContent = this.enabled ? 'Dźwięk: ON' : 'Dźwięk: OFF';
+        });
+
+        return this.enabled;
+    },
+
+    notify() {
+        if (!this.enabled) return;
+
+        try {
+            this.audioContext ??= new (window.AudioContext || window.webkitAudioContext)();
+
+            const ctx = this.audioContext;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.12);
+
+            gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.06, ctx.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start();
+            osc.stop(ctx.currentTime + 0.2);
+        } catch (error) {
+            console.warn('Nie udało się odtworzyć dźwięku powiadomienia.', error);
+        }
+    }
+};
+
+const getLoggedUserId = () => AppState.getUser()?.id ?? null;
+
+const getViewedProfileId = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('id') || getLoggedUserId();
+};
+
+const setProfileStatusDot = (status) => {
+    const statusDot = document.getElementById('p-current-status');
+    if (!statusDot) return;
+
+    const isOnline = status === 'online';
+    statusDot.style.background = isOnline ? '#00E676' : '#333333';
+    statusDot.setAttribute('title', isOnline ? 'Online' : 'Offline');
+};
+
+window.applyCurrentProfileStatus = () => {
+    const viewedProfileId = getViewedProfileId();
+    if (!viewedProfileId) return;
+
+    setProfileStatusDot(window.onlineUsers.has(String(viewedProfileId)) ? 'online' : 'offline');
+};
+
+window.requestOnlineStatuses = () => {
+    if (window.wsClient?.readyState === WebSocket.OPEN) {
+        window.wsClient.send(JSON.stringify({type: 'request_status'}));
+    }
+};
+
+window.initWebSocket = () => {
+    const userId = getLoggedUserId();
+    if (!userId) return;
+
+    if (window.wsClient && [WebSocket.CONNECTING, WebSocket.OPEN].includes(window.wsClient.readyState)) {
+        return;
+    }
+
+    console.log('Initializing websocket');
+
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsPort = AppState.getWsPort?.() || 8080;
+
+    window.wsClient = new WebSocket(`${wsProtocol}://${window.location.hostname}:${wsPort}`);
+
+    window.wsClient.onopen = () => {
+        console.log(`WS connected on ${wsProtocol}://${window.location.hostname}:${wsPort}`);
+
+        const wsToken = AppState.getWsToken?.();
+
+        if (!wsToken) {
+            console.warn('Brak tokena WebSocket — auth pominięty.');
+            return;
+        }
+
+        window.wsClient.send(JSON.stringify({
+            type: 'auth',
+            token: wsToken
+        }));
+    };
+
+    window.wsClient.onmessage = (event) => {
+        let data;
+        try {
+            data = JSON.parse(event.data);
+        } catch (error) {
+            console.error('WS: invalid message', error);
+            return;
+        }
+
+        if (data.action === 'auth_ok') {
+            console.log('WS authenticated as user', data.userId);
+        }
+
+        if (data.action === 'auth_failed' || data.action === 'auth_required') {
+            console.warn('WS auth problem:', data.message);
+            return;
+        }
+
+        if (data.action === 'fetch_notifications') {
+            notificationController.load();
+            Sound.notify();
+            Toast.show('Dostałeś nowe powiadomienie.');
+        }
+
+        if (data.action === 'fetch_chat') {
+            Sound.notify();
+
+            notificationController.load();
+
+            if (window.friendsController) {
+                friendsController.onChatNotification(data);
+            }
+        }
+
+        if (data.action === 'user_status_change') {
+            const changedUserId = String(data.user_id);
+            console.log(`WS: ${changedUserId} jest teraz ${data.status}`);
+
+            if (data.status === 'online') {
+                window.onlineUsers.add(changedUserId);
+            } else {
+                window.onlineUsers.delete(changedUserId);
+            }
+
+            if (String(getViewedProfileId()) === changedUserId) {
+                setProfileStatusDot(data.status);
+            }
+        }
+
+        if (data.action === 'initial_status_list') {
+            window.onlineUsers = new Set((data.users || []).map(id => String(id)));
+            window.applyCurrentProfileStatus();
+        }
+    };
+
+    window.wsClient.onclose = () => {
+        window.wsClient = null;
+        window.onlineUsers.clear();
+        window.applyCurrentProfileStatus();
+    };
+
+    window.wsClient.onerror = (error) => {
+        console.error('WS error:', error);
+    };
+};
 
 const ViewSkeletons = {
     dashboard: `
@@ -18,11 +244,8 @@ const ViewSkeletons = {
                 <div class="skeleton-box" style="height: 40px; width: 30%;"></div>
                 <div class="skeleton-box" style="width: 400px; height: 160px; border-radius: 16px;"></div>
             </div>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
-                <div class="skeleton-box" style="height: 380px; border-radius: 12px;"></div>
-                <div class="skeleton-box" style="height: 380px; border-radius: 12px;"></div>
-                <div class="skeleton-box" style="height: 380px; border-radius: 12px;"></div>
-            </div>
+            <div class="skeleton-box" style="width: 800px; height: 400px; margin: 0 auto; border-radius: 12px;"></div>
+            <div class="skeleton-box" style="width: 100%; height: 600px; border-radius: 8px; margin-top: 20px;"></div>
         </div>
     `,
     teams: `
@@ -37,7 +260,67 @@ const ViewSkeletons = {
             </div>
         </div>
     `,
-    // Fallback - uniwersalny szablon dla stron, które nie mają swojego specyficznego
+    tournaments: `
+    <div style="width: 100%; display: flex; align-items: center;">
+        <div class="skeleton-box" style="height: 40px; width: 18%;"></div>
+        <div class="skeleton-box" style="height: 40px; width: 8%; margin: 0 20px;"></div>
+    </div>
+    <div style="margin-top: 20px; display: flex; flex-direction: column; justify-content: start; gap: 10px;">
+        <div class="skeleton-box" style="height: 80px;"></div>
+        <div class="skeleton-box" style="height: 80px;"></div>
+        <div class="skeleton-box" style="height: 80px;"></div>
+    </div>
+    `,
+    tournament: `
+        <div style="padding: 40px;">
+            <div class="skeleton-box" style="height: 200px; border-radius: 12px; margin-bottom: 20px;"></div>
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+                <div class="skeleton-box" style="height: 300px; border-radius: 12px;"></div>
+                <div class="skeleton-box" style="height: 300px; border-radius: 12px;"></div>
+            </div>
+        </div>
+    `,
+    profile: `
+        <div style="max-width: 800px; margin: 0 auto; padding: 40px 0;">
+            <div class="skeleton-box" style="height: 210px; border-radius: 12px;"></div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+                <div class="skeleton-box" style="height: 150px; border-radius: 12px;"></div>
+                <div class="skeleton-box" style="height: 150px; border-radius: 12px;"></div>
+            </div>
+        </div>
+    `,
+    friends: `
+        <div style="display: grid; grid-template-columns: 340px 1fr; gap: 20px; height: calc(100vh - 80px);">
+            <div class="skeleton-box" style="border-radius: 16px;"></div>
+            <div class="skeleton-box" style="border-radius: 16px;"></div>
+        </div>
+    `,
+    settings: `
+        <div style="max-width: 1000px; margin: 0 auto;">
+            <div class="skeleton-box" style="height: 120px; border-radius: 18px; margin-bottom: 20px;"></div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="skeleton-box" style="height: 520px; border-radius: 18px;"></div>
+                <div class="skeleton-box" style="height: 520px; border-radius: 18px;"></div>
+            </div>
+        </div>
+    `,
+    admin: `
+        <div style="max-width: 1180px; margin: 0 auto;">
+            <div class="skeleton-box" style="height: 140px; border-radius: 18px; margin-bottom: 20px;"></div>
+            <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px;">
+                <div class="skeleton-box" style="height: 120px; border-radius: 16px;"></div>
+                <div class="skeleton-box" style="height: 120px; border-radius: 16px;"></div>
+                <div class="skeleton-box" style="height: 120px; border-radius: 16px;"></div>
+                <div class="skeleton-box" style="height: 120px; border-radius: 16px;"></div>
+                <div class="skeleton-box" style="height: 120px; border-radius: 16px;"></div>
+                <div class="skeleton-box" style="height: 120px; border-radius: 16px;"></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="skeleton-box" style="height: 420px; border-radius: 18px;"></div>
+                <div class="skeleton-box" style="height: 420px; border-radius: 18px;"></div>
+            </div>
+        </div>
+    `,
     default: `
         <div style="padding: 40px; max-width: 800px; margin: 0 auto;">
             <div class="skeleton-box" style="height: 40px; width: 40%; margin-bottom: 30px;"></div>
@@ -48,9 +331,14 @@ const ViewSkeletons = {
 };
 
 const router = {
-    navigate: async (viewName, updateUrl = true) => {
+    navigate: async (viewName, updateUrl = true, params = {}) => {
         if ((viewName !== 'login' && viewName !== 'register') && !AppState.isLoggedIn()) {
             viewName = 'login';
+        }
+
+        if (viewName === 'admin' && !AppState.getUser()?.player?.isAdmin) {
+            window.Toast?.show('Brak uprawnień administratora.', 'error');
+            viewName = 'dashboard';
         }
 
         if ((viewName === 'login' || viewName === 'register') && AppState.isLoggedIn()) {
@@ -67,9 +355,11 @@ const router = {
 
         const appContainer = document.getElementById('app');
         appContainer.innerHTML = ViewSkeletons[viewName] || ViewSkeletons.default;
+
         try {
             const res = await fetch(`views/${viewName}.html?v=${Date.now()}`);
-            //await new Promise(resolve => setTimeout(resolve, 150));
+            // wait
+            //await new Promise(resolve => setTimeout(resolve, 500));
             if (!res.ok) {
                 throw new Error('Nie znaleziono pliku widoku');
             }
@@ -78,7 +368,33 @@ const router = {
             appContainer.innerHTML = htmlContent;
 
             if (updateUrl) {
-                history.pushState({view: viewName}, '', `/${viewName}`);
+               if (viewName === 'tournament') {
+                    const id = tournamentViewController.currentId ?? new URLSearchParams(location.search).get('id');
+
+                    history.pushState(
+                        { view: "tournament", id },
+                        "",
+                        `/tournament?id=${id}`
+                    );
+               } else if (viewName === 'profile') {
+                    const id = params.id || null;
+
+                    if (id) {
+                        history.pushState(
+                            { view: "profile", id },
+                            "",
+                            `/profile?id=${encodeURIComponent(id)}`
+                        );
+                    } else {
+                        history.pushState(
+                            { view: "profile", id: null },
+                            "",
+                            `/profile`
+                        );
+                    }
+               } else {
+                    history.pushState({view: viewName}, '', `/${viewName}`);
+               }
             }
             document.title = `${viewName.toUpperCase()} | Clutchify.gg`
             router.initView(viewName);
@@ -95,13 +411,25 @@ const router = {
         const activeBtn = document.querySelector(`button[onclick="router.navigate('${viewName}')"]`);
         if (activeBtn) activeBtn.classList.add('active');
     },
-    initView: (viewName) => {
+    initView: async (viewName) => {
         if (viewName === 'teams') {
             teamController.init();
         } else if (viewName === 'setup') {
             setupController.init();
         } else if (viewName === 'dashboard') {
             dashboardController.init();
+        } else if (viewName === 'tournaments') {
+            tournamentController.init();
+        } else if (viewName === 'tournament') {
+            await tournamentViewController.init();
+        } else if (viewName === 'profile') {
+            await profileController.init();
+        } else if (viewName === 'friends') {
+            await friendsController.init();
+        } else if (viewName === 'settings') {
+            await settingsController.init();
+        } else if (viewName === 'admin') {
+            await adminController.init();
         }
     }
 };
@@ -225,59 +553,122 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (AppState.isLoggedIn()) {
         notificationController.init();
+        window.initWebSocket();
     }
     
     const currentPath = window.location.pathname.replace('/', ''); 
     const defaultView = currentPath ? currentPath : 'dashboard';
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialParams = defaultView === 'profile' ? { id: urlParams.get('id') } : {};
     
-    router.navigate(defaultView);
+    router.navigate(defaultView, true, initialParams);
 
     const menuEl = document.getElementById('pop-menu');
     const menuBtn = document.getElementById('nav-profile');
-    menuBtn.addEventListener('click', () => {
-        if (!menuEl) return;
 
-        const isHidden = menuEl.classList.contains('hidden');
+    let profileMenuCloseTimer = null;
 
-        if (isHidden) {
-            menuEl.style.display = 'block';
+    const isProfileMenuOpen = () => {
+        return menuEl?.classList.contains('is-open');
+    };
 
-            requestAnimationFrame(() => {
-                menuEl.classList.remove('hidden');
-            });
+    const openProfileMenu = () => {
+        if (!menuEl || !menuBtn) return;
+
+        clearTimeout(profileMenuCloseTimer);
+
+        menuEl.classList.remove('is-closed', 'is-closing');
+        menuEl.style.display = 'block';
+
+        /**
+         * Wymuszamy reflow, żeby przeglądarka zauważyła stan początkowy
+         * przed dodaniem klasy is-open. Bez tego czasem przeskakuje bez animacji.
+         */
+        menuEl.offsetHeight;
+
+        requestAnimationFrame(() => {
+            menuEl.classList.add('is-open');
+            menuEl.setAttribute('aria-hidden', 'false');
+        });
+    };
+
+    const closeProfileMenu = () => {
+        if (!menuEl || !isProfileMenuOpen()) return;
+
+        clearTimeout(profileMenuCloseTimer);
+
+        menuEl.classList.remove('is-open');
+        menuEl.classList.add('is-closing');
+        menuEl.setAttribute('aria-hidden', 'true');
+
+        const finishClose = () => {
+            menuEl.classList.remove('is-closing');
+            menuEl.classList.add('is-closed');
+            menuEl.style.display = 'none';
+        };
+
+        menuEl.addEventListener('transitionend', finishClose, { once: true });
+
+        /**
+         * Fallback, bo transitionend może nie odpalić np. przy szybkim klikaniu,
+         * zmianie display, reduced motion albo przerwaniu animacji.
+         */
+        profileMenuCloseTimer = setTimeout(finishClose, 280);
+    };
+
+    const toggleProfileMenu = () => {
+        if (isProfileMenuOpen()) {
+            closeProfileMenu();
         } else {
-            menuEl.classList.add('hidden');
-
-            menuEl.addEventListener('transitionend', () => {
-                menuEl.style.display = 'none';
-            }, { once: true });
+            openProfileMenu();
         }
-    });
-    menuEl.addEventListener('click', (e) => {
-        if (e.target.closest('button, a')) {
-            menuEl.classList.add('hidden');
-        }
-    });
-    document.addEventListener('click', (e) => {
-        if (menuEl.classList.contains('hidden')) return;
-        if (menuBtn.contains(e.target)) return;
-        if (menuEl.contains(e.target)) return;
+    };
 
-        menuEl.classList.add('hidden');
-    });
+    if (menuBtn && menuEl) {
+        menuBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            toggleProfileMenu();
+        });
+
+        menuEl.addEventListener('click', (event) => {
+            const clickedMenuAction = event.target.closest('button, a');
+
+            if (clickedMenuAction) {
+                closeProfileMenu();
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!isProfileMenuOpen()) return;
+            if (menuBtn.contains(event.target)) return;
+            if (menuEl.contains(event.target)) return;
+
+            closeProfileMenu();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeProfileMenu();
+            }
+        });
+    }
 
     const notifBtn = document.getElementById('nav-notifications');
     const drawer = document.getElementById('notification-drawer');
     const drawerOverlay = document.getElementById('drawer-overlay');
     const closeDrawerBtn = document.getElementById('btn-close-drawer');
 
-    const toggleDrawer = (forceState) => {
+    const toggleDrawer = async (forceState) => {
         const isOpen = drawer.classList.contains('open');
         const newState = forceState !== undefined ? forceState : !isOpen;
 
         if (newState) {
             drawer.classList.add('open');
             drawerOverlay.classList.add('active');
+
+            if (window.notificationController?.activeTab === 'notifications') {
+                await notificationController.markSystemNotificationsSeen();
+            }
         } else {
             drawer.classList.remove('open');
             drawerOverlay.classList.remove('active');

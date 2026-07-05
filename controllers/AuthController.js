@@ -7,9 +7,12 @@ export const authController = {
             const data = await res.json();
 
             if (data.logged_in) {
-                AppState.setUser(data.user)
+                AppState.setUser(data.user);
+                AppState.setCsrfToken(data.csrf_token);
+                AppState.setWsToken(data.ws_token);
+                AppState.setWsPort(data.ws_port);
             } else {
-                AppState.setUser(null);
+                AppState.clear ? AppState.clear() : AppState.setUser(null);
             }
             authController.updateUI();
         } catch (err) {
@@ -20,10 +23,14 @@ export const authController = {
         const guestLinks = document.querySelectorAll('.guest-link');
         const protectedLinks = document.querySelectorAll('.protected-link');
         const navProfile = document.getElementById('nav-profile');
+        const adminLinks = document.querySelectorAll('.admin-only');
 
         if (AppState.isLoggedIn()) {
             guestLinks.forEach(el => el.style.display = 'none');
             protectedLinks.forEach(el => el.style.display = 'block');
+            const isAdmin = !!AppState.getUser()?.player?.isAdmin;
+            adminLinks.forEach(el => el.style.display = isAdmin ? 'block' : 'none');
+            
             if (navProfile) {
                 const avatarUrl = AppState.getUser().player.avatar ? AppState.getUser().player.avatar : `https://ui-avatars.com/api/?name=${AppState.getUser().username}&background=121212&color=ff002b`
                 navProfile.innerHTML = `
@@ -34,6 +41,8 @@ export const authController = {
         } else {
             guestLinks.forEach(el => el.style.display = 'block');
             protectedLinks.forEach(el => el.style.display = 'none');
+            adminLinks.forEach(el => el.style.display = 'none');
+
             if (navProfile) navProfile.style.display = 'none';
         }
     },
@@ -79,6 +88,7 @@ export const authController = {
 
             if (data.success) {
                 await authController.checkSession();
+                window.initWebSocket?.();
                 const res = await fetch('api.php?action=check-for-configuration');
                 const confData = await res.json();
 
@@ -96,8 +106,23 @@ export const authController = {
     },
 
     handleLogout: async () => {
-        await fetch('api.php?action=logout');
-        AppState.setUser(null);
+        await window.apiFetch('api.php?action=logout', {
+            method: 'POST'
+        });
+
+        if (window.wsClient) {
+            window.wsClient.close();
+            window.wsClient = null;
+        }
+
+        window.onlineUsers?.clear();
+
+        if (AppState.clear) {
+            AppState.clear();
+        } else {
+            AppState.setUser(null);
+        }
+
         window.Toast.show('Wylogowano pomyślnie.');
         authController.updateUI();
         window.router.navigate('dashboard');
