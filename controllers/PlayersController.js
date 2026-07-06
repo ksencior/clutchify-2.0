@@ -168,6 +168,8 @@ export const playersController = {
                             <span>${esc(player.school || 'Brak szkoły / org.')}</span>
                         </div>
 
+                        ${playersController.renderMiniBadges(player.badges || [])}
+
                         <small>
                             Dostępność: ${esc(player.availability || 'Brak informacji')}
                         </small>
@@ -175,7 +177,7 @@ export const playersController = {
                 </div>
 
                 <div class="player-directory-actions">
-                    <button class="btn-ok compact" onclick="playersController.openProfile(${Number(player.id)})">
+                    <button class="btn-ok compact" onclick="playersController.openProfile(${Number(player.id)}, '${playersController.jsArg(player.username)}')">
                         Profil
                     </button>
 
@@ -206,10 +208,32 @@ export const playersController = {
             </article>
         `;
     },
+    renderMiniBadges: (badges = []) => {
+        if (!badges.length) return '';
 
-    openProfile: (id) => {
-        history.pushState({ view: 'profile', id }, '', `/profile?id=${id}`);
-        window.router.navigate('profile', false, { id });
+        return `
+            <div class="player-directory-badges">
+                ${badges.slice(0, 4).map(badge => `
+                    <span class="profile-badge badge-${esc(badge.type)}">
+                        ${esc(badge.label)}
+                    </span>
+                `).join('')}
+            </div>
+        `;
+    },
+
+    openProfile: (id, username = null) => {
+        if (username) {
+            window.router.navigate('profile', true, {
+                id: Number(id),
+                username
+            });
+            return;
+        }
+
+        window.router.navigate('profile', true, {
+            id: Number(id)
+        });
     },
 
     getSteamProfileUrl: (steamId) => {
@@ -246,7 +270,7 @@ export const playersController = {
 
         if (player.friend_status === 'me') {
             return `
-                <button class="btn-ok compact" onclick="playersController.openProfile(${id})">
+                <button class="btn-ok compact" onclick="playersController.openProfile(${id}, '${username}')">
                     Twój profil
                 </button>
             `;

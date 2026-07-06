@@ -1,23 +1,36 @@
 <?php
-
-function roleLabel(?string $role): string {
-    return match ($role) {
-        'entry' => 'Entry Fragger',
-        'rifler' => 'Rifler',
-        'awper' => 'AWPer',
-        'igl' => 'IGL',
-        'lurker' => 'Lurker',
-        'support' => 'Support',
-        default => 'Nie ustawiono'
-    };
-}
-
 if ($action === 'get_profile') {
-    $viewerId = requireUserId();
+    $viewerId = isset($_SESSION['user_id'])
+        ? (int)$_SESSION['user_id']
+        : null;
 
-    $targetId = (isset($_GET['id']) && is_numeric($_GET['id']))
-        ? (int)$_GET['id']
-        : $viewerId;
+    $targetId = null;
+    $targetUsername = null;
+
+    if (isset($_GET['id']) && is_numeric($_GET['id'])) {
+        $targetId = (int)$_GET['id'];
+    }
+
+    if (isset($_GET['username'])) {
+        $targetUsername = trim((string)$_GET['username']);
+    }
+
+    if ($targetUsername !== null && $targetUsername !== '') {
+        if (!preg_match('/^[a-zA-Z0-9_.-]{3,24}$/', $targetUsername)) {
+            jsonError('Nieprawidłowy link profilu.', 400);
+        }
+
+        $whereSql = 'u.username = ?';
+        $whereParam = $targetUsername;
+    } elseif ($targetId !== null && $targetId > 0) {
+        $whereSql = 'u.id = ?';
+        $whereParam = $targetId;
+    } elseif ($viewerId !== null) {
+        $whereSql = 'u.id = ?';
+        $whereParam = $viewerId;
+    } else {
+        jsonError('Nie podano profilu do wyświetlenia.', 400);
+    }
 
     $stmt = $pdo->prepare("
         SELECT
@@ -34,6 +47,7 @@ if ($action === 'get_profile') {
             p.availability,
             p.steam_id,
             p.discord_id,
+            p.isAdmin,
 
             t.name AS team_name,
             t.tag AS team_tag,
@@ -41,10 +55,11 @@ if ($action === 'get_profile') {
         FROM users u
         LEFT JOIN players p ON u.id = p.user_id
         LEFT JOIN teams t ON p.team_id = t.id
-        WHERE u.id = ?
+        WHERE {$whereSql}
         LIMIT 1
     ");
-    $stmt->execute([$targetId]);
+
+    $stmt->execute([$whereParam]);
 
     $userProfile = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -52,15 +67,35 @@ if ($action === 'get_profile') {
         jsonError('Gracz nie istnieje.', 404);
     }
 
-    $userProfile['is_me'] = ($targetId === $viewerId);
+    $userProfile['id'] = (int)$userProfile['id'];
+    $userProfile['is_me'] = $viewerId !== null && $userProfile['id'] === $viewerId;
+    $userProfile['viewer_logged_in'] = $viewerId !== null;
 
-    $friendInfo = $userProfile['is_me']
-        ? ['status' => 'me', 'friendship_id' => null]
-        : getFriendStatusForViewer($pdo, $viewerId, $targetId);
+    if ($viewerId === null) {
+        $userProfile['friend_status'] = 'guest';
+        $userProfile['friendship_id'] = null;
+    } else {
+        $friendInfo = $userProfile['is_me']
+            ? ['status' => 'me', 'friendship_id' => null]
+            : getFriendStatusForViewer($pdo, $viewerId, $userProfile['id']);
 
-    $userProfile['friend_status'] = $friendInfo['status'];
-    $userProfile['friendship_id'] = $friendInfo['friendship_id'];
-    $userProfile['preferred_role_label'] = roleLabel($userProfile['preferred_role'] ?? null);
+        $userProfile['friend_status'] = $friendInfo['status'];
+        $userProfile['friendship_id'] = $friendInfo['friendship_id'];
+    }
+
+    $userProfile['preferred_role'] = $userProfile['preferred_role'] ?: 'unknown';
+    $userProfile['preferred_role_label'] = profileRoleLabel($userProfile['preferred_role']);
+
+    $userProfile['faceit_level'] = $userProfile['faceit_level'] !== null
+        ? (int)$userProfile['faceit_level']
+        : null;
+
+    $userProfile['isAdmin'] = (bool)($userProfile['isAdmin'] ?? false);
+
+    $completeness = profileCompleteness($userProfile);
+
+    $userProfile['profile_completeness'] = $completeness;
+    $userProfile['badges'] = profileBadges($userProfile, $completeness);
 
     jsonSuccess([
         'profile' => $userProfile
@@ -84,7 +119,9 @@ if ($action === 'get_profile_settings') {
             p.school,
             p.availability,
             p.steam_id,
-            p.discord_id
+            p.discord_id,
+            p.isAdmin
+
         FROM users u
         LEFT JOIN players p ON p.user_id = u.id
         WHERE u.id = ?
@@ -97,6 +134,13 @@ if ($action === 'get_profile_settings') {
     if (!$settings) {
         jsonError('Nie znaleziono profilu.', 404);
     }
+
+    $settings['isAdmin'] = (bool)($settings['isAdmin'] ?? false);
+
+    $completeness = profileCompleteness($settings);
+
+    $settings['profile_completeness'] = $completeness;
+    $settings['badges'] = profileBadges($settings, $completeness);
 
     jsonSuccess([
         'settings' => $settings
@@ -126,8 +170,8 @@ if ($action === 'update_profile_settings') {
         'support'
     ];
 
-    if (!preg_match('/^[a-zA-Z0-9_.-]{3,24}$/', $username)) {
-        jsonError('Nick może mieć 3-24 znaki i zawierać tylko litery, cyfry, _, . oraz -.');
+    if (!isValidUsername($username)) {
+        jsonError(usernameValidationMessage());
     }
 
     if (!in_array($preferredRole, $allowedRoles, true)) {

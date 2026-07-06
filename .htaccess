@@ -1,12 +1,15 @@
 <IfModule mod_rewrite.c>
+    Options -MultiViews
+
     RewriteEngine On
     RewriteBase /
+
     RewriteRule ^index\.html$ - [L]
-    
+
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
-    # W każdym innym przypadku (np. /teams, /dashboard) przekieruj ruch po cichu na index.html
+    # SPA fallback: /dashboard, /profile, /u/username itd.
     RewriteRule ^ index.html [L,QSA]
 </IfModule>

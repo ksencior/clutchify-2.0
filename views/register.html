@@ -5,7 +5,23 @@
     <form id="register-form" onsubmit="authController.handleRegister(event)" style="display: flex; flex-direction: column; gap: 15px;">
         <div>
             <label style="display: block; font-size: 11px; text-transform: uppercase; color: var(--text-gray); margin-bottom: 5px; letter-spacing: 1px;">Nazwa użytkownika</label>
-            <input type="text" id="reg-username" required style="width: 100%; background: #080808; border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; color: white; outline: none;">
+            <input
+                type="text"
+                id="reg-username"
+                required
+                minlength="3"
+                maxlength="24"
+                pattern="[A-Za-z0-9_.-]{3,24}"
+                autocomplete="username"
+                autocapitalize="off"
+                spellcheck="false"
+                placeholder="np. Gracz-1"
+                title="3-24 znaki: litery, cyfry, _, . oraz -. Bez spacji."
+                style="width: 100%; background: #080808; border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; color: white; outline: none;"
+            >
+            <small style="display:block; color: var(--text-gray); font-size: 11px; margin-top: 6px;">
+                3-24 znaki: litery, cyfry, _, . oraz -. Bez spacji.
+            </small>
         </div>
         
         <div>

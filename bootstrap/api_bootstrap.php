@@ -43,6 +43,18 @@ function getJsonInput(): array {
     return is_array($input) ? $input : [];
 }
 
+function normalizeUsername(string $username): string {
+    return trim($username);
+}
+
+function isValidUsername(string $username): bool {
+    return preg_match('/^[a-zA-Z0-9_.-]{3,24}$/', $username) === 1;
+}
+
+function usernameValidationMessage(): string {
+    return 'Nick może mieć 3-24 znaki i zawierać tylko litery, cyfry, _, . oraz -. Bez spacji i znaków specjalnych.';
+}
+
 function getRandomHex($num_bytes = 4) {
     return bin2hex(openssl_random_pseudo_bytes($num_bytes));
 }
@@ -106,6 +118,7 @@ function csrfProtectedActions(): array {
     return [
         'logout',
         'update_profile_settings',
+        'change_password',
 
         'send_friend_request',
         'respond_friend_request',
@@ -134,7 +147,10 @@ function csrfProtectedActions(): array {
 }
 
 function postOnlyActions(): array {
-    return csrfProtectedActions();
+    return array_merge(csrfProtectedActions(), [
+        'register',
+        'login'
+    ]);
 }
 
 function getFriendship(PDO $pdo, int $userA, int $userB) {
@@ -250,4 +266,147 @@ function logActivity(
          */
         error_log('Activity log error: ' . $e->getMessage());
     }
+}
+
+
+function profileCompleteness(array $profile): array {
+    $checks = [
+        [
+            'key' => 'avatar',
+            'label' => 'Dodaj avatar',
+            'done' => !empty($profile['avatar'])
+        ],
+        [
+            'key' => 'bio',
+            'label' => 'Uzupełnij bio',
+            'done' => !empty($profile['bio'])
+        ],
+        [
+            'key' => 'preferred_role',
+            'label' => 'Wybierz rolę w CS',
+            'done' => !empty($profile['preferred_role']) && $profile['preferred_role'] !== 'unknown'
+        ],
+        [
+            'key' => 'faceit_level',
+            'label' => 'Dodaj Faceit level',
+            'done' => !empty($profile['faceit_level'])
+        ],
+        [
+            'key' => 'region',
+            'label' => 'Ustaw region',
+            'done' => !empty($profile['region'])
+        ],
+        [
+            'key' => 'school',
+            'label' => 'Dodaj szkołę / organizację',
+            'done' => !empty($profile['school'])
+        ],
+        [
+            'key' => 'availability',
+            'label' => 'Dodaj dostępność',
+            'done' => !empty($profile['availability'])
+        ],
+        [
+            'key' => 'steam_id',
+            'label' => 'Połącz Steam',
+            'done' => !empty($profile['steam_id'])
+        ],
+        [
+            'key' => 'discord_id',
+            'label' => 'Połącz Discord',
+            'done' => !empty($profile['discord_id'])
+        ],
+    ];
+
+    $done = 0;
+
+    foreach ($checks as $check) {
+        if ($check['done']) {
+            $done++;
+        }
+    }
+
+    $total = count($checks);
+    $percent = $total > 0 ? (int)round(($done / $total) * 100) : 0;
+
+    return [
+        'percent' => $percent,
+        'done' => $done,
+        'total' => $total,
+        'missing' => array_values(array_filter($checks, fn($check) => !$check['done']))
+    ];
+}
+
+function profileBadges(array $profile, array $completeness): array {
+    $badges = [];
+
+    if (!empty($profile['isAdmin'])) {
+        $badges[] = [
+            'type' => 'admin',
+            'label' => 'Admin',
+            'description' => 'Administrator platformy'
+        ];
+    }
+
+    if ($completeness['percent'] >= 100) {
+        $badges[] = [
+            'type' => 'complete',
+            'label' => 'Profil 100%',
+            'description' => 'Uzupełniony profil gracza'
+        ];
+    }
+
+    if (!empty($profile['steam_id'])) {
+        $badges[] = [
+            'type' => 'steam',
+            'label' => 'Steam',
+            'description' => 'Połączone konto Steam'
+        ];
+    }
+
+    if (!empty($profile['discord_id'])) {
+        $badges[] = [
+            'type' => 'discord',
+            'label' => 'Discord',
+            'description' => 'Połączone konto Discord'
+        ];
+    }
+
+    if (!empty($profile['team_name'])) {
+        $badges[] = [
+            'type' => 'team',
+            'label' => 'Team Player',
+            'description' => 'Należy do drużyny'
+        ];
+    }
+
+    if (!empty($profile['faceit_level'])) {
+        $badges[] = [
+            'type' => 'faceit',
+            'label' => 'Faceit ' . (int)$profile['faceit_level'],
+            'description' => 'Poziom Faceit gracza'
+        ];
+    }
+
+    if (!empty($profile['preferred_role']) && $profile['preferred_role'] !== 'unknown') {
+        $badges[] = [
+            'type' => 'role',
+            'label' => profileRoleLabel($profile['preferred_role']),
+            'description' => 'Preferowana rola w CS'
+        ];
+    }
+
+    return $badges;
+}
+
+function profileRoleLabel(?string $role): string {
+    return match ($role) {
+        'entry' => 'Entry Fragger',
+        'rifler' => 'Rifler',
+        'awper' => 'AWPer',
+        'igl' => 'IGL',
+        'lurker' => 'Lurker',
+        'support' => 'Support',
+        default => 'Nie ustawiono'
+    };
 }

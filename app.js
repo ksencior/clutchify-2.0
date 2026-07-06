@@ -123,9 +123,44 @@ window.Sound = {
 
 const getLoggedUserId = () => AppState.getUser()?.id ?? null;
 
+window.currentViewedProfileId = null;
+
+const getVanityUsernameFromPath = (path = window.location.pathname) => {
+    const match = path.match(/^\/u\/([^/?#]+)\/?$/i);
+
+    if (!match) return null;
+
+    try {
+        return decodeURIComponent(match[1]);
+    } catch (_) {
+        return match[1];
+    }
+};
+
+const getProfileRouteIdentifier = (params = {}) => {
+    return params.username
+        || params.id
+        || window.history.state?.username
+        || window.history.state?.id
+        || getVanityUsernameFromPath()
+        || new URLSearchParams(window.location.search).get('username')
+        || new URLSearchParams(window.location.search).get('id');
+};
+
+const isPublicProfileRoute = (viewName, params = {}) => {
+    if (viewName !== 'profile') return false;
+
+    const identifier = getProfileRouteIdentifier(params);
+
+    return !!identifier;
+};
+
 const getViewedProfileId = () => {
     const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('id') || getLoggedUserId();
+
+    return window.currentViewedProfileId
+        || urlParams.get('id')
+        || getLoggedUserId();
 };
 
 const setProfileStatusDot = (status) => {
@@ -163,7 +198,27 @@ window.initWebSocket = () => {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const wsPort = AppState.getWsPort?.() || 8080;
 
-    window.wsClient = new WebSocket(`${wsProtocol}://${window.location.hostname}:${wsPort}`);
+    const resolveWebSocketUrl = () => {
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        const hostname = window.location.hostname;
+
+        const isLocalHost =
+            hostname === 'localhost'
+            || hostname === 'clutchify.test'
+            || hostname === '127.0.0.1'
+            || hostname === '::1'
+            || hostname.startsWith('192.168.')
+            || hostname.startsWith('10.')
+            || /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname);
+
+        if (isLocalHost) {
+            return `${wsProtocol}://${hostname}:${wsPort}`;
+        }
+
+        return `${wsProtocol}://${window.location.host}/ws`;
+    };
+
+    window.wsClient = new WebSocket(resolveWebSocketUrl());
 
     window.wsClient.onopen = () => {
         console.log(`WS connected on ${wsProtocol}://${window.location.hostname}:${wsPort}`);
@@ -356,7 +411,14 @@ const ViewSkeletons = {
 
 const router = {
     navigate: async (viewName, updateUrl = true, params = {}) => {
-        if ((viewName !== 'login' && viewName !== 'register') && !AppState.isLoggedIn()) {
+        const publicProfileRoute = isPublicProfileRoute(viewName, params);
+
+        if (
+            viewName !== 'login'
+            && viewName !== 'register'
+            && !publicProfileRoute
+            && !AppState.isLoggedIn()
+        ) {
             viewName = 'login';
         }
 
@@ -400,23 +462,40 @@ const router = {
                         "",
                         `/tournament?id=${id}`
                     );
-               } else if (viewName === 'profile') {
+                } else if (viewName === 'profile') {
+                    const username = params.username || null;
                     const id = params.id || null;
 
-                    if (id) {
+                    if (username) {
                         history.pushState(
-                            { view: "profile", id },
-                            "",
+                            {
+                                view: 'profile',
+                                username
+                            },
+                            '',
+                            `/u/${encodeURIComponent(username)}`
+                        );
+                    } else if (id) {
+                        history.pushState(
+                            {
+                                view: 'profile',
+                                id
+                            },
+                            '',
                             `/profile?id=${encodeURIComponent(id)}`
                         );
                     } else {
                         history.pushState(
-                            { view: "profile", id: null },
-                            "",
+                            {
+                                view: 'profile',
+                                id: null,
+                                username: null
+                            },
+                            '',
                             `/profile`
                         );
                     }
-               } else {
+                } else {
                     history.pushState({view: viewName}, '', `/${viewName}`);
                }
             }
@@ -570,10 +649,18 @@ window.Popout = Popout;
 
 window.onpopstate = (event) => {
     if (event.state && event.state.view) {
-        router.navigate(event.state.view, false);
-    } else {
-        router.navigate('dashboard', false);
+        router.navigate(event.state.view, false, event.state);
+        return;
     }
+
+    const vanityUsername = getVanityUsernameFromPath();
+
+    if (vanityUsername) {
+        router.navigate('profile', false, { username: vanityUsername });
+        return;
+    }
+
+    router.navigate('dashboard', false);
 };
 document.addEventListener('DOMContentLoaded', async () => {
 
@@ -581,12 +668,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await window.bootstrapLoggedInServices?.();
     
-    const currentPath = window.location.pathname.replace('/', ''); 
-    const defaultView = currentPath ? currentPath : 'dashboard';
+    const vanityUsername = getVanityUsernameFromPath();
     const urlParams = new URLSearchParams(window.location.search);
-    const initialParams = defaultView === 'profile' ? { id: urlParams.get('id') } : {};
-    
-    router.navigate(defaultView, true, initialParams);
+
+    let currentPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
+    let defaultView = currentPath ? currentPath : 'dashboard';
+    let initialParams = {};
+
+    if (vanityUsername) {
+        defaultView = 'profile';
+        initialParams = {
+            username: vanityUsername
+        };
+    } else if (defaultView === 'profile') {
+        initialParams = {
+            id: urlParams.get('id'),
+            username: urlParams.get('username')
+        };
+    }
+
+    router.navigate(defaultView, false, initialParams);
 
     const menuEl = document.getElementById('pop-menu');
     const menuBtn = document.getElementById('nav-profile');

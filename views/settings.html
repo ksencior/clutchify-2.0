@@ -23,7 +23,12 @@
                         id="settings-username"
                         data-settings-preview
                         type="text"
+                        minlength="3"
                         maxlength="24"
+                        pattern="[A-Za-z0-9_.-]{3,24}"
+                        autocomplete="username"
+                        autocapitalize="off"
+                        spellcheck="false"
                         placeholder="Twój nick"
                     >
                     <small>3-24 znaki: litery, cyfry, _, . oraz -</small>
@@ -151,6 +156,45 @@
                 </div>
             </section>
 
+            <div class="settings-public-link">
+                <strong>Publiczny link profilu</strong>
+                <div>
+                    <input id="settings-public-profile-link" type="text" readonly>
+                    <button class="btn-ok compact" type="button" onclick="settingsController.copyPublicProfileLink()">
+                        Kopiuj
+                    </button>
+                </div>
+            </div>
+
+            <section class="settings-card">
+                <h2>Twój profil</h2>
+                <p class="settings-muted">Uzupełnij profil, żeby lepiej wyglądał w katalogu graczy.</p>
+
+                <div class="profile-completeness-card is-settings">
+                    <div class="profile-completeness-head">
+                        <div>
+                            <h3>Kompletność profilu</h3>
+                            <p id="settings-completeness-text">0% uzupełnienia profilu</p>
+                        </div>
+                    </div>
+
+                    <div class="profile-completeness-track">
+                        <div id="settings-completeness-bar" class="profile-completeness-bar"></div>
+                    </div>
+
+                    <ul id="settings-completeness-missing" class="profile-completeness-missing">
+                        <li>Ładowanie...</li>
+                    </ul>
+                </div>
+
+                <div class="settings-badges-block">
+                    <strong>Odznaki</strong>
+                    <div id="settings-badges" class="profile-badges">
+                        <span class="profile-badge is-empty">Brak odznak</span>
+                    </div>
+                </div>
+            </section>
+
             <section class="settings-card">
                 <h2>Połączone konta</h2>
                 <p class="settings-muted">Steam i Discord edytujemy przez ponowne połączenie konta.</p>
@@ -166,6 +210,50 @@
                         <strong id="settings-discord">-</strong>
                     </div>
                 </div>
+            </section>
+
+            <section class="settings-card">
+                <h2>Bezpieczeństwo konta</h2>
+                <p class="settings-muted">
+                    Zmień hasło do swojego konta. Po zmianie możesz dalej korzystać z aktualnej sesji.
+                </p>
+
+                <form id="settings-password-form" class="settings-form settings-security-form">
+                    <label>
+                        Aktualne hasło
+                        <input
+                            id="settings-current-password"
+                            type="password"
+                            autocomplete="current-password"
+                            placeholder="Wpisz aktualne hasło"
+                        >
+                    </label>
+
+                    <label>
+                        Nowe hasło
+                        <input
+                            id="settings-new-password"
+                            type="password"
+                            autocomplete="new-password"
+                            placeholder="Minimum 8 znaków"
+                        >
+                        <small>Użyj hasła, którego nie używasz na innych stronach.</small>
+                    </label>
+
+                    <label>
+                        Powtórz nowe hasło
+                        <input
+                            id="settings-new-password-confirm"
+                            type="password"
+                            autocomplete="new-password"
+                            placeholder="Powtórz nowe hasło"
+                        >
+                    </label>
+
+                    <button class="btn-confirm" type="submit">
+                        Zmień hasło
+                    </button>
+                </form>
             </section>
         </aside>
     </div>

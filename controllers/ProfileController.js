@@ -1,38 +1,82 @@
 import { AppState } from "../state.js";
 
+const getVanityUsernameFromPath = () => {
+    const match = window.location.pathname.match(/^\/u\/([^/?#]+)\/?$/i);
+
+    if (!match) return null;
+
+    try {
+        return decodeURIComponent(match[1]);
+    } catch (_) {
+        return match[1];
+    }
+};
+
 export const profileController = {
     init: async () => {
         window.profileController = profileController;
-        
-        let targetId = window.history.state?.id;
 
-        if (!targetId) {
-            const urlParams = new URLSearchParams(window.location.search);
-            targetId = urlParams.get('id');
+        const urlParams = new URLSearchParams(window.location.search);
+
+        let targetUsername = window.history.state?.username
+            || getVanityUsernameFromPath()
+            || urlParams.get('username');
+
+        let targetId = window.history.state?.id
+            || urlParams.get('id');
+
+        if (!targetUsername && (!targetId || Number(targetId) === 0)) {
+            const currentUser = AppState.getUser();
+
+            if (!currentUser?.id) {
+                window.Toast.show('Zaloguj się, aby zobaczyć swój profil.', 'error');
+                window.router.navigate('login');
+                return;
+            }
+
+            targetId = currentUser.id;
         }
 
-        if (!targetId || targetId == 0) targetId = AppState.getUser().id;
-        console.log(targetId);
-        
-        await profileController.loadProfile(targetId);
+        await profileController.loadProfile({
+            id: targetId,
+            username: targetUsername
+        });
     },
 
-    loadProfile: async (targetId) => {
+    loadProfile: async ({ id = null, username = null } = {}) => {
         try {
-            // Budujemy URL w zależności czy targetId istnieje
-            const apiUrl = targetId ? `api.php?action=get_profile&id=${targetId}` : `api.php?action=get_profile`;
-            
-            const response = await fetch(apiUrl);
+            const params = new URLSearchParams({
+                action: 'get_profile'
+            });
+
+            if (username) {
+                params.set('username', username);
+            } else if (id) {
+                params.set('id', id);
+            }
+
+            const response = await fetch(`api.php?${params.toString()}`);
             const data = await response.json();
 
             if (!data.success) {
-                window.Toast.show(data.message, 'error');
-                window.router.navigate('dashboard');
+                window.Toast.show(data.message || 'Nie udało się pobrać profilu.', 'error');
+
+                if (AppState.isLoggedIn()) {
+                    window.router.navigate('dashboard');
+                } else {
+                    window.router.navigate('login');
+                }
+
                 return;
             }
 
             const profile = data.profile;
+
             profileController.renderProfile(profile);
+
+            window.currentViewedProfileId = String(profile.id);
+            document.title = `${profile.username} | Clutchify.gg`;
+
             window.requestOnlineStatuses?.();
             window.applyCurrentProfileStatus?.();
 
@@ -43,10 +87,13 @@ export const profileController = {
     },
 
     renderProfile: (profile) => {
+        window.currentViewedProfileId = String(profile.id);
         document.getElementById('p-view-username').innerText = profile.username;
-        document.getElementById('p-view-steam').innerText = profile.steam_id || 'Brak połączenia';
         
         profileController.renderConnectedAccounts(profile);
+
+        profileController.renderProfileCompleteness(profile.profile_completeness, profile.is_me);
+        profileController.renderBadges(profile.badges || []);
 
         const bioEl = document.getElementById('p-view-bio');
         if (bioEl) bioEl.innerText = profile.bio || 'Ten gracz nie dodał jeszcze opisu profilu.';
@@ -89,7 +136,26 @@ export const profileController = {
 
         // Renderowanie przycisków
         const actionsContainer = document.getElementById('p-view-actions');
+        if (!AppState.isLoggedIn() || profile.friend_status === 'guest') {
+            actionsContainer.innerHTML = `
+                <button
+                    class="nav-btn active"
+                    style="padding: 8px 15px; font-size: 12px;"
+                    onclick="router.navigate('login')"
+                >
+                    Zaloguj się, aby dodać
+                </button>
 
+                <button
+                    class="btn-ok"
+                    style="padding: 8px 15px; font-size: 12px;"
+                    onclick="router.navigate('register')"
+                >
+                    Załóż konto
+                </button>
+            `;
+            return;
+        }
         if (profile.is_me) {
             actionsContainer.innerHTML = `
                 <button
@@ -232,5 +298,60 @@ export const profileController = {
         }
 
         return null;
+    },
+    renderProfileCompleteness: (completeness, isMe = false) => {
+        const wrap = document.getElementById('p-view-completeness');
+        const bar = document.getElementById('p-view-completeness-bar');
+        const text = document.getElementById('p-view-completeness-text');
+        const missing = document.getElementById('p-view-completeness-missing');
+        const action = document.getElementById('p-view-completeness-action');
+
+        if (!wrap || !bar || !text || !missing || !completeness) return;
+
+        if (action) {
+            action.style.display = isMe ? 'inline-flex' : 'none';
+        }
+
+        const percent = Number(completeness.percent || 0);
+
+        bar.style.width = `${percent}%`;
+        text.textContent = `${percent}% uzupełnienia profilu`;
+
+        const missingItems = completeness.missing || [];
+
+        if (!missingItems.length) {
+            missing.innerHTML = `
+                <li>Profil jest kompletny. Kozak.</li>
+            `;
+            return;
+        }
+
+        missing.innerHTML = missingItems
+            .slice(0, 4)
+            .map(item => `<li>${window.escapeHTML(item.label)}</li>`)
+            .join('');
+    },
+
+    renderBadges: (badges = []) => {
+        const container = document.getElementById('p-view-badges');
+        if (!container) return;
+
+        if (!badges.length) {
+            container.innerHTML = `
+                <span class="profile-badge is-empty">Brak odznak</span>
+            `;
+            return;
+        }
+
+        container.innerHTML = badges
+            .map(badge => `
+                <span
+                    class="profile-badge badge-${window.escapeHTML(badge.type)}"
+                    title="${window.escapeHTML(badge.description || badge.label)}"
+                >
+                    ${window.escapeHTML(badge.label)}
+                </span>
+            `)
+            .join('');
     },
 };

@@ -19,6 +19,9 @@
                         <div id="p-view-team-section" style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
                             </div>
                         <h1 id="p-view-username" style="margin: 0; font-size: 38px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; text-shadow: 0 4px 10px rgba(0,0,0,0.5);">-</h1>
+                        <div id="p-view-badges" class="profile-badges">
+                            <span class="profile-badge is-empty">Brak odznak</span>
+                        </div>
                         <p style="color: var(--text-gray); font-size: 14px; margin-top: 5px;">
                             Członek od <span id="p-view-created-at">-</span> • 🌍 <span id="p-view-region">EU</span>
                         </p>
@@ -87,6 +90,26 @@
                         <span style="color: var(--text-gray); font-size: 13px;">Dostępność</span>
                         <strong id="p-view-availability" style="font-size: 13px;">-</strong>
                     </div>
+                </div>
+                <div class="profile-completeness-card">
+                    <div class="profile-completeness-head">
+                        <div>
+                            <h3>Kompletność profilu</h3>
+                            <p id="p-view-completeness-text">0% uzupełnienia profilu</p>
+                        </div>
+                    </div>
+
+                    <div class="profile-completeness-track">
+                        <div id="p-view-completeness-bar" class="profile-completeness-bar"></div>
+                    </div>
+
+                    <ul id="p-view-completeness-missing" class="profile-completeness-missing">
+                        <li>Ładowanie...</li>
+                    </ul>
+
+                    <button id="p-view-completeness-action" class="btn-ok compact" onclick="router.navigate('settings')">
+                        Uzupełnij profil
+                    </button>
                 </div>
             </div>
         </div>

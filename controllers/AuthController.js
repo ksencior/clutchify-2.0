@@ -24,6 +24,7 @@ export const authController = {
         const protectedLinks = document.querySelectorAll('.protected-link');
         const navProfile = document.getElementById('nav-profile');
         const adminLinks = document.querySelectorAll('.admin-only');
+        const navNotifications = document.getElementById('nav-notifications');
 
         if (AppState.isLoggedIn()) {
             guestLinks.forEach(el => el.style.display = 'none');
@@ -38,12 +39,18 @@ export const authController = {
                 <span>${AppState.getUser().username}</span>`;
                 navProfile.style.display = 'flex';
             }
+            if (navNotifications) {
+                navNotifications.style.display = 'flex';
+            }
         } else {
             guestLinks.forEach(el => el.style.display = 'block');
             protectedLinks.forEach(el => el.style.display = 'none');
             adminLinks.forEach(el => el.style.display = 'none');
 
             if (navProfile) navProfile.style.display = 'none';
+            if (navNotifications) {
+                navNotifications.style.display = 'none';
+            }
         }
     },
     handleRegister: async (e) => {
@@ -52,6 +59,18 @@ export const authController = {
         const username = document.getElementById('reg-username').value;
         const email = document.getElementById('reg-email').value;
         const password = document.getElementById('reg-password').value;
+
+        const usernameRegex = /^[A-Za-z0-9_.-]{3,24}$/;
+
+        if (!usernameRegex.test(username)) {
+            window.Toast.show('Nick może mieć 3-24 znaki i zawierać tylko litery, cyfry, _, . oraz -. Bez spacji.', 'error');
+            return;
+        }
+
+        if (password.length < 8) {
+            window.Toast.show('Hasło musi mieć minimum 8 znaków.', 'error');
+            return;
+        }
 
         try {
             const response = await fetch('api.php?action=register', {

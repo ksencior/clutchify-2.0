@@ -118,11 +118,19 @@ if ($action === 'get_players_directory') {
         if ((int)$player['id'] === $viewerId) {
             $player['friend_status'] = 'me';
             $player['friendship_id'] = null;
+            $completeness = profileCompleteness($player);
+
+            $player['profile_completeness'] = $completeness;
+            $player['badges'] = profileBadges($player, $completeness);
         } else {
             $friendInfo = getFriendStatusForViewer($pdo, $viewerId, (int)$player['id']);
 
             $player['friend_status'] = $friendInfo['status'];
             $player['friendship_id'] = $friendInfo['friendship_id'];
+            $completeness = profileCompleteness($player);
+
+            $player['profile_completeness'] = $completeness;
+            $player['badges'] = profileBadges($player, $completeness);
         }
     }
 
