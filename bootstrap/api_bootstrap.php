@@ -1,4 +1,23 @@
 <?php
+$maxDesktopSessionLifetime = 60 * 60 * 24 * 30; // 30 dni
+
+$isDesktopClient = ($_SERVER['HTTP_X_CLUTCHIFY_DESKTOP'] ?? '') === '1';
+
+$isHttps =
+    (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+
+if ($isDesktopClient) {
+    ini_set('session.gc_maxlifetime', (string)$maxDesktopSessionLifetime);
+}
+
+session_set_cookie_params([
+    'lifetime' => $isDesktopClient ? $maxDesktopSessionLifetime : 0,
+    'path' => '/',
+    'secure' => $isHttps,
+    'httponly' => true,
+    'samesite' => 'Lax'
+]);
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

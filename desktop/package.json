@@ -6,10 +6,11 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win"
+    "build:win": "electron-builder --win",
+    "build": "electron-builder"
   },
   "devDependencies": {
-    "electron": "^33.0.0",
+    "electron": "^35.0.0",
     "electron-builder": "^25.0.0"
   },
   "build": {
@@ -20,11 +21,19 @@
     },
     "files": [
       "main.js",
+      "preload.js",
       "assets/**/*"
     ],
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Clutchify"
     }
   }
 }
