@@ -40,6 +40,7 @@ export const tournamentViewController = {
             tournamentViewController.renderTournament(data);
             tournamentViewController.renderJoinBox(data);
             tournamentViewController.renderParticipants(data);
+            tournamentViewController.renderBracket(data);
             tournamentViewController.renderAdminControls(data);
         } catch (error) {
             console.error(error);
@@ -255,6 +256,122 @@ export const tournamentViewController = {
         return labels[status] || 'Nieznany status';
     },
 
+    renderBracket: (data) => {
+        const container = document.getElementById('t-view-bracket');
+        if (!container) return;
+
+        const matches = data.matches || [];
+
+        if (!matches.length) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    Bracket nie został jeszcze wygenerowany.
+                </div>
+            `;
+            return;
+        }
+
+        const rounds = {};
+
+        matches.forEach(match => {
+            const round = Number(match.round_number);
+
+            if (!rounds[round]) {
+                rounds[round] = [];
+            }
+
+            rounds[round].push(match);
+        });
+
+        const roundNumbers = Object.keys(rounds)
+            .map(Number)
+            .sort((a, b) => a - b);
+
+        const finalRound = Math.max(...roundNumbers);
+
+        container.innerHTML = `
+            <div class="tournament-bracket">
+                ${roundNumbers.map(roundNumber => `
+                    <section class="bracket-round">
+                        <h3>${window.escapeHTML(tournamentViewController.roundLabel(roundNumber, finalRound))}</h3>
+
+                        <div class="bracket-match-list">
+                            ${rounds[roundNumber]
+                                .sort((a, b) => Number(a.match_number) - Number(b.match_number))
+                                .map(match => tournamentViewController.renderBracketMatch(match))
+                                .join('')}
+                        </div>
+                    </section>
+                `).join('')}
+            </div>
+        `;
+    },
+
+    renderBracketMatch: (match) => {
+        return `
+            <article class="bracket-match status-${window.escapeHTML(match.status)}">
+                <div class="bracket-match-header">
+                    <span>Mecz #${Number(match.match_number)}</span>
+                    <strong>${window.escapeHTML(tournamentViewController.matchStatusLabel(match.status))}</strong>
+                </div>
+
+                ${tournamentViewController.renderBracketTeam(match, 'a')}
+                ${tournamentViewController.renderBracketTeam(match, 'b')}
+            </article>
+        `;
+    },
+
+    renderBracketTeam: (match, side) => {
+        const id = match[`team_${side}_id`];
+        const name = match[`team_${side}_name`];
+        const tag = match[`team_${side}_tag`];
+
+        const isWinner = id && Number(match.winner_team_id) === Number(id);
+
+        if (!id) {
+            return `
+                <div class="bracket-team is-empty">
+                    <span>TBD</span>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="bracket-team ${isWinner ? 'is-winner' : ''}">
+                <span>
+                    ${tag ? `[${window.escapeHTML(tag)}] ` : ''}
+                    ${window.escapeHTML(name || 'Drużyna')}
+                </span>
+
+                ${isWinner ? '<strong>WIN</strong>' : ''}
+            </div>
+        `;
+    },
+
+    roundLabel: (roundNumber, finalRound) => {
+        if (roundNumber === finalRound) {
+            return 'Finał';
+        }
+
+        if (roundNumber === finalRound - 1) {
+            return 'Półfinał';
+        }
+
+        return `Runda ${roundNumber}`;
+    },
+
+    matchStatusLabel: (status) => {
+        const labels = {
+            pending: 'Oczekuje',
+            ready_check: 'Ready',
+            live: 'Live',
+            finished: 'Zakończony',
+            cancelled: 'Anulowany'
+        };
+
+        return labels[status] || status;
+    },
+
     renderAdminControls: (data) => {
         const statusEl = document.getElementById('t-view-admin-status');
         const controlsEl = document.getElementById('t-view-admin-controls');
@@ -304,14 +421,42 @@ export const tournamentViewController = {
         }
 
         if (status === 'registration_closed') {
+            const hasBracket = (data.matches || []).length > 0;
+
+            let generateButton = '';
+
+            if (hasBracket) {
+                generateButton = `
+                    <button class="btn-confirm" disabled>
+                        Bracket już wygenerowany
+                    </button>
+                `;
+            } else if (pendingCount > 0) {
+                generateButton = `
+                    <button class="btn-confirm" disabled title="Najpierw rozpatrz oczekujące zgłoszenia">
+                        Wygeneruj bracket
+                    </button>
+                `;
+            } else if (approvedCount < 2) {
+                generateButton = `
+                    <button class="btn-confirm" disabled title="Potrzeba minimum 2 zatwierdzonych drużyn">
+                        Wygeneruj bracket
+                    </button>
+                `;
+            } else {
+                generateButton = `
+                    <button class="btn-confirm" onclick="tournamentViewController.generateBracket()">
+                        Wygeneruj bracket
+                    </button>
+                `;
+            }
+
             controlsEl.innerHTML = `
                 <button class="btn-ok" onclick="tournamentViewController.reopenRegistration()">
                     Otwórz zapisy ponownie
                 </button>
 
-                <button class="btn-confirm" disabled title="To zrobimy w następnym kroku">
-                    Wygeneruj bracket
-                </button>
+                ${generateButton}
             `;
             return;
         }
@@ -332,52 +477,98 @@ export const tournamentViewController = {
         `;
     },
 
-    closeRegistration: async () => {
-        const confirmed = confirm(
-            'Na pewno zamknąć zapisy? Nowe drużyny nie będą mogły już dołączyć, ale nadal możesz zaakceptować oczekujące zgłoszenia.'
-        );
-
-        if (!confirmed) return;
-
-        const response = await window.apiFetch('api.php?action=close_tournament_registration', {
-            method: 'POST',
-            body: JSON.stringify({
-                tournament_id: tournamentViewController.currentId
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            window.Toast.show(data.message, 'success');
-            await tournamentViewController.loadDetails();
-        } else {
-            window.Toast.show(data.message, 'error');
+    confirmAction: ({ title, message, onConfirm }) => {
+        if (!window.Popout?.create) {
+            const confirmed = confirm(message);
+            if (confirmed && typeof onConfirm === 'function') {
+                onConfirm();
+            }
+            return;
         }
+
+        window.Popout.create(
+            title,
+            message,
+            null,
+            async () => {
+                if (typeof onConfirm === 'function') {
+                    await onConfirm();
+                }
+            },
+            'confirm'
+        );
+    },
+
+    generateBracket: async () => {
+        tournamentViewController.confirmAction({
+            title: 'Wygenerować bracket?',
+            message: 'Zostaną utworzone mecze, a turniej przejdzie w status "W trakcie".',
+            onConfirm: async () => {
+                const response = await window.apiFetch('api.php?action=generate_bracket', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        tournament_id: tournamentViewController.currentId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    window.Toast.show(data.message, 'success');
+                    await tournamentViewController.loadDetails();
+                } else {
+                    window.Toast.show(data.message, 'error');
+                }
+            }
+        });
+    },
+
+    closeRegistration: async () => {
+        tournamentViewController.confirmAction({
+            title: 'Zamknąć zapisy?',
+            message: 'Nowe drużyny nie będą mogły już dołączyć, ale nadal możesz zaakceptować oczekujące zgłoszenia.',
+            onConfirm: async () => {
+                const response = await window.apiFetch('api.php?action=close_tournament_registration', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        tournament_id: tournamentViewController.currentId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    window.Toast.show(data.message, 'success');
+                    await tournamentViewController.loadDetails();
+                } else {
+                    window.Toast.show(data.message, 'error');
+                }
+            }
+        });
     },
 
     reopenRegistration: async () => {
-        const confirmed = confirm(
-            'Na pewno ponownie otworzyć zapisy? Drużyny będą mogły znowu wysyłać zgłoszenia.'
-        );
+        tournamentViewController.confirmAction({
+            title: 'Otworzyć zapisy ponownie?',
+            message: 'Drużyny będą mogły znowu wysyłać zgłoszenia.',
+            onConfirm: async () => {
+                const response = await window.apiFetch('api.php?action=reopen_tournament_registration', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        tournament_id: tournamentViewController.currentId
+                    })
+                });
 
-        if (!confirmed) return;
+                const data = await response.json();
 
-        const response = await window.apiFetch('api.php?action=reopen_tournament_registration', {
-            method: 'POST',
-            body: JSON.stringify({
-                tournament_id: tournamentViewController.currentId
-            })
+                if (data.success) {
+                    window.Toast.show(data.message, 'success');
+                    await tournamentViewController.loadDetails();
+                } else {
+                    window.Toast.show(data.message, 'error');
+                }
+            }
         });
-
-        const data = await response.json();
-
-        if (data.success) {
-            window.Toast.show(data.message, 'success');
-            await tournamentViewController.loadDetails();
-        } else {
-            window.Toast.show(data.message, 'error');
-        }
     },
 
     joinTournament: async () => {

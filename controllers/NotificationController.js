@@ -10,7 +10,6 @@ export const notificationController = {
     activeTab: 'notifications',
 
     init: () => {
-        window.notificationController = notificationController;
         notificationController.load();
     },
 
@@ -57,7 +56,13 @@ export const notificationController = {
         const totalCount = notificationsCount + messagesCount;
 
         if (drawerCount) {
-            drawerCount.textContent = totalCount;
+            if (totalCount > 0) {
+                drawerCount.style.display = 'inline-flex';
+                drawerCount.textContent = totalCount > 9 ? '9+' : totalCount;
+            } else {
+                drawerCount.style.display = 'none';
+                drawerCount.textContent = '0';
+            }
         }
 
         if (!badge) return;
@@ -312,5 +317,14 @@ export const notificationController = {
         } catch (err) {
             window.Toast.show('Błąd komunikacji z serwerem.', 'error');
         }
+    },
+    reset: () => {
+        notificationController.notifications = [];
+        notificationController.unreadNotificationsCount = 0;
+        notificationController.messageThreads = [];
+        notificationController.unreadMessagesTotal = 0;
+        notificationController.activeTab = 'notifications';
+
+        notificationController.render();
     }
 };

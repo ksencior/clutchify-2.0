@@ -128,6 +128,67 @@ function getTournamentParticipants(PDO $pdo, int $tournamentId, bool $isAdmin = 
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+function nextPowerOfTwo(int $number): int {
+    $power = 1;
+
+    while ($power < $number) {
+        $power *= 2;
+    }
+
+    return $power;
+}
+
+function getTournamentMatches(PDO $pdo, int $tournamentId): array {
+    $stmt = $pdo->prepare("
+        SELECT
+            tm.id,
+            tm.tournament_id,
+            tm.round_number,
+            tm.match_number,
+            tm.team_a_id,
+            tm.team_b_id,
+            tm.winner_team_id,
+            tm.status,
+            tm.scheduled_at,
+            tm.started_at,
+            tm.finished_at,
+            tm.created_at,
+
+            ta.name AS team_a_name,
+            ta.tag AS team_a_tag,
+            ta.logo AS team_a_logo,
+
+            tb.name AS team_b_name,
+            tb.tag AS team_b_tag,
+            tb.logo AS team_b_logo,
+
+            tw.name AS winner_team_name,
+            tw.tag AS winner_team_tag
+        FROM tournament_matches tm
+        LEFT JOIN teams ta ON ta.id = tm.team_a_id
+        LEFT JOIN teams tb ON tb.id = tm.team_b_id
+        LEFT JOIN teams tw ON tw.id = tm.winner_team_id
+        WHERE tm.tournament_id = ?
+        ORDER BY tm.round_number ASC, tm.match_number ASC
+    ");
+
+    $stmt->execute([$tournamentId]);
+
+    $matches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($matches as &$match) {
+        $match['id'] = (int)$match['id'];
+        $match['tournament_id'] = (int)$match['tournament_id'];
+        $match['round_number'] = (int)$match['round_number'];
+        $match['match_number'] = (int)$match['match_number'];
+        $match['team_a_id'] = $match['team_a_id'] !== null ? (int)$match['team_a_id'] : null;
+        $match['team_b_id'] = $match['team_b_id'] !== null ? (int)$match['team_b_id'] : null;
+        $match['winner_team_id'] = $match['winner_team_id'] !== null ? (int)$match['winner_team_id'] : null;
+    }
+
+    return $matches;
+}
+
 if ($action === 'get_open_tournaments') {
     try {
         $stmt = $pdo->prepare("
@@ -247,6 +308,7 @@ if ($action === 'get_tournament') {
         }
 
         $participants = getTournamentParticipants($pdo, $id, $isAdmin, $viewerTeamId);
+        $matches = getTournamentMatches($pdo, $id);
         $userRegistration = null;
 
         if ($viewerTeamId) {
@@ -272,6 +334,7 @@ if ($action === 'get_tournament') {
         jsonSuccess([
             'tournament' => $tournament,
             'participants' => $participants,
+            'matches' => $matches,
             'user_team' => $viewerTeam,
             'user_registration' => $userRegistration,
             'is_admin' => $isAdmin,
@@ -567,6 +630,239 @@ if ($action === 'review_tournament_team') {
             ? 'Zgłoszenie zatwierdzone.'
             : 'Zgłoszenie odrzucone.'
     ]);
+}
+if ($action === 'generate_bracket') {
+    $userId = requireUserId();
+
+    if (!tournamentIsAdmin($pdo, $userId)) {
+        jsonError('Nie masz uprawnień do wygenerowania drabinki.', 403);
+    }
+
+    $input = getJsonInput();
+    $tournamentId = (int)($input['tournament_id'] ?? 0);
+
+    if (!$tournamentId) {
+        jsonError('Brak ID turnieju.');
+    }
+
+    $tournament = getTournamentById($pdo, $tournamentId);
+
+    if (!$tournament) {
+        jsonError('Turniej nie istnieje.', 404);
+    }
+
+    if (tournamentStatus($tournament) !== 'registration_closed') {
+        jsonError('Bracket można wygenerować dopiero po zamknięciu zapisów.');
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM tournament_teams
+        WHERE tournament_id = ?
+          AND status = 'pending'
+    ");
+    $stmt->execute([$tournamentId]);
+
+    if ((int)$stmt->fetchColumn() > 0) {
+        jsonError('Najpierw rozpatrz wszystkie oczekujące zgłoszenia.');
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM tournament_matches
+        WHERE tournament_id = ?
+    ");
+    $stmt->execute([$tournamentId]);
+
+    if ((int)$stmt->fetchColumn() > 0) {
+        jsonError('Bracket został już wygenerowany.');
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT
+            teams.id,
+            teams.name,
+            teams.tag
+        FROM tournament_teams tt
+        JOIN teams ON teams.id = tt.team_id
+        WHERE tt.tournament_id = ?
+          AND tt.status = 'approved'
+        ORDER BY tt.created_at ASC
+    ");
+    $stmt->execute([$tournamentId]);
+
+    $teams = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (count($teams) < 2) {
+        jsonError('Do wygenerowania bracketu potrzeba minimum 2 zatwierdzonych drużyn.');
+    }
+
+    shuffle($teams);
+
+    $teamCount = count($teams);
+    $bracketSize = nextPowerOfTwo($teamCount);
+    $roundOneMatchCount = intdiv($bracketSize, 2);
+    $byeCount = $bracketSize - $teamCount;
+
+    $rounds = [];
+    $teamCursor = 0;
+
+    for ($matchNumber = 1; $matchNumber <= $roundOneMatchCount; $matchNumber++) {
+        if ($byeCount > 0) {
+            $teamA = $teams[$teamCursor++] ?? null;
+            $teamB = null;
+            $byeCount--;
+        } else {
+            $teamA = $teams[$teamCursor++] ?? null;
+            $teamB = $teams[$teamCursor++] ?? null;
+        }
+
+        $teamAId = $teamA ? (int)$teamA['id'] : null;
+        $teamBId = $teamB ? (int)$teamB['id'] : null;
+
+        $status = 'pending';
+        $winnerTeamId = null;
+
+        if ($teamAId && !$teamBId) {
+            $status = 'finished';
+            $winnerTeamId = $teamAId;
+        } elseif (!$teamAId && $teamBId) {
+            $status = 'finished';
+            $winnerTeamId = $teamBId;
+        }
+
+        $rounds[1][] = [
+            'round_number' => 1,
+            'match_number' => $matchNumber,
+            'team_a_id' => $teamAId,
+            'team_b_id' => $teamBId,
+            'winner_team_id' => $winnerTeamId,
+            'status' => $status
+        ];
+    }
+
+    $previousRound = $rounds[1];
+    $roundNumber = 2;
+
+    while (count($previousRound) > 1) {
+        $nextRound = [];
+        $nextMatchNumber = 1;
+
+        for ($i = 0; $i < count($previousRound); $i += 2) {
+            $leftMatch = $previousRound[$i];
+            $rightMatch = $previousRound[$i + 1];
+
+            $leftResolved = $leftMatch['status'] === 'finished';
+            $rightResolved = $rightMatch['status'] === 'finished';
+
+            $teamAId = $leftResolved ? $leftMatch['winner_team_id'] : null;
+            $teamBId = $rightResolved ? $rightMatch['winner_team_id'] : null;
+
+            $status = 'pending';
+            $winnerTeamId = null;
+
+            if ($leftResolved && $rightResolved) {
+                if ($teamAId && !$teamBId) {
+                    $status = 'finished';
+                    $winnerTeamId = $teamAId;
+                } elseif (!$teamAId && $teamBId) {
+                    $status = 'finished';
+                    $winnerTeamId = $teamBId;
+                }
+            }
+
+            $nextRound[] = [
+                'round_number' => $roundNumber,
+                'match_number' => $nextMatchNumber,
+                'team_a_id' => $teamAId,
+                'team_b_id' => $teamBId,
+                'winner_team_id' => $winnerTeamId,
+                'status' => $status
+            ];
+
+            $nextMatchNumber++;
+        }
+
+        $rounds[$roundNumber] = $nextRound;
+        $previousRound = $nextRound;
+        $roundNumber++;
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $stmt = $pdo->prepare("
+            INSERT INTO tournament_matches (
+                tournament_id,
+                round_number,
+                match_number,
+                team_a_id,
+                team_b_id,
+                winner_team_id,
+                status,
+                finished_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+
+        $createdMatches = 0;
+
+        foreach ($rounds as $roundMatches) {
+            foreach ($roundMatches as $match) {
+                $stmt->execute([
+                    $tournamentId,
+                    $match['round_number'],
+                    $match['match_number'],
+                    $match['team_a_id'],
+                    $match['team_b_id'],
+                    $match['winner_team_id'],
+                    $match['status'],
+                    $match['status'] === 'finished' ? date('Y-m-d H:i:s') : null
+                ]);
+
+                $createdMatches++;
+            }
+        }
+
+        $stmt = $pdo->prepare("
+            UPDATE tournaments
+            SET status = 'in_progress'
+            WHERE id = ?
+              AND status = 'registration_closed'
+        ");
+        $stmt->execute([$tournamentId]);
+
+        $pdo->commit();
+
+        logActivity(
+            $pdo,
+            'bracket_generated',
+            'Bracket wygenerowany',
+            'Wygenerowano drabinkę dla turnieju ' . $tournament['title'] . '.',
+            $userId,
+            'tournament',
+            $tournamentId,
+            [
+                'tournament_title' => $tournament['title'],
+                'team_count' => $teamCount,
+                'bracket_size' => $bracketSize,
+                'matches_created' => $createdMatches
+            ],
+            'public'
+        );
+
+        jsonSuccess([
+            'message' => 'Bracket został wygenerowany.',
+            'matches_created' => $createdMatches,
+            'bracket_size' => $bracketSize
+        ]);
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        jsonError('Nie udało się wygenerować bracketu.', 500);
+    }
 }
 if ($action === 'close_tournament_registration') {
     $userId = requireUserId();

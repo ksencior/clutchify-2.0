@@ -1,0 +1,93 @@
+<div class="players-page">
+    <header class="players-hero">
+        <div>
+            <span class="eyebrow">Społeczność</span>
+            <h1>Katalog <span class="red-text">graczy</span></h1>
+            <p>Przeglądaj profile graczy, role, regiony, poziom Faceit i połączone konta.</p>
+        </div>
+
+        <button class="btn-ok" onclick="router.navigate('settings')">
+            Edytuj swój profil
+        </button>
+    </header>
+
+    <section class="players-filter-card">
+        <form id="players-filters-form" class="players-filters">
+            <label>
+                Szukaj po nicku
+                <input
+                    id="players-search"
+                    type="text"
+                    maxlength="60"
+                    placeholder="np. ksencior"
+                >
+            </label>
+
+            <label>
+                Rola
+                <select id="players-role">
+                    <option value="">Wszystkie role</option>
+                    <option value="unknown">Nie ustawiono</option>
+                    <option value="entry">Entry Fragger</option>
+                    <option value="rifler">Rifler</option>
+                    <option value="awper">AWPer</option>
+                    <option value="igl">IGL</option>
+                    <option value="lurker">Lurker</option>
+                    <option value="support">Support</option>
+                </select>
+            </label>
+
+            <label>
+                Region
+                <input
+                    id="players-region"
+                    type="text"
+                    maxlength="40"
+                    placeholder="EU / PL / Kuj-Pom"
+                >
+            </label>
+
+            <label>
+                Min. Faceit
+                <select id="players-faceit-min">
+                    <option value="">Dowolny</option>
+                    <option value="1">1+</option>
+                    <option value="2">2+</option>
+                    <option value="3">3+</option>
+                    <option value="4">4+</option>
+                    <option value="5">5+</option>
+                    <option value="6">6+</option>
+                    <option value="7">7+</option>
+                    <option value="8">8+</option>
+                    <option value="9">9+</option>
+                    <option value="10">10</option>
+                </select>
+            </label>
+
+            <div class="players-filter-actions">
+                <button class="btn-confirm compact" type="submit">
+                    Filtruj
+                </button>
+
+                <button class="btn-ok compact" type="button" id="players-reset">
+                    Reset
+                </button>
+            </div>
+        </form>
+    </section>
+
+    <section class="players-list-section">
+        <div class="players-list-heading">
+            <div>
+                <span class="eyebrow">Wyniki</span>
+                <h2>Gracze</h2>
+            </div>
+
+            <strong id="players-count">0 graczy</strong>
+        </div>
+
+        <div id="players-list" class="players-list">
+            <div class="empty-state">Ładowanie graczy...</div>
+        </div>
+    </section>
+</div>

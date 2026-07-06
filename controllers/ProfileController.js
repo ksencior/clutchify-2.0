@@ -45,8 +45,8 @@ export const profileController = {
     renderProfile: (profile) => {
         document.getElementById('p-view-username').innerText = profile.username;
         document.getElementById('p-view-steam').innerText = profile.steam_id || 'Brak połączenia';
-        const discordEl = document.getElementById('p-view-discord');
-        if (discordEl) discordEl.innerText = profile.discord_id || 'Brak połączenia';
+        
+        profileController.renderConnectedAccounts(profile);
 
         const bioEl = document.getElementById('p-view-bio');
         if (bioEl) bioEl.innerText = profile.bio || 'Ten gracz nie dodał jeszcze opisu profilu.';
@@ -163,5 +163,74 @@ export const profileController = {
                 Zgłoś
             </button>
         `;
-    }
+    },
+    renderConnectedAccounts: (profile) => {
+        const steamEl = document.getElementById('p-view-steam');
+        const discordEl = document.getElementById('p-view-discord');
+
+        if (steamEl) {
+            profileController.renderExternalAccountLink(
+                steamEl,
+                profile.steam_id,
+                profileController.getSteamProfileUrl(profile.steam_id),
+                'Otwórz profil Steam'
+            );
+        }
+
+        if (discordEl) {
+            profileController.renderExternalAccountLink(
+                discordEl,
+                profile.discord_id,
+                profileController.getDiscordProfileUrl(profile.discord_id),
+                'Otwórz profil Discord'
+            );
+        }
+    },
+
+    renderExternalAccountLink: (element, value, url, label) => {
+        if (!value || !url) {
+            element.innerHTML = `<span class="profile-account-empty">Brak połączenia</span>`;
+            return;
+        }
+
+        element.innerHTML = `
+            <a
+                class="profile-account-link"
+                href="${window.escapeHTML(url)}"
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                ${window.escapeHTML(label)}
+                <span>↗</span>
+            </a>
+        `;
+    },
+
+    getSteamProfileUrl: (steamId) => {
+        if (!steamId) return null;
+
+        const value = String(steamId).trim();
+
+        if (/^https?:\/\//i.test(value)) {
+            return value;
+        }
+
+        if (/^\d{15,20}$/.test(value)) {
+            return `https://steamcommunity.com/profiles/${encodeURIComponent(value)}`;
+        }
+
+        return `https://steamcommunity.com/id/${encodeURIComponent(value)}`;
+    },
+
+    getDiscordProfileUrl: (discordId) => {
+        if (!discordId) return null;
+
+        const value = String(discordId).trim();
+
+        if (/^\d{10,25}$/.test(value)) {
+            return `https://discord.com/users/${encodeURIComponent(value)}`;
+        }
+
+        return null;
+    },
 };

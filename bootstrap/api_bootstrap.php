@@ -128,7 +128,8 @@ function csrfProtectedActions(): array {
         'leave_tournament',
         'review_tournament_team',
         'close_tournament_registration',
-        'reopen_tournament_registration'
+        'reopen_tournament_registration',
+        'generate_bracket'
     ];
 }
 

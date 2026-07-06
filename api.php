@@ -17,6 +17,7 @@ if (in_array($action, csrfProtectedActions(), true)) {
 require_once __DIR__ . '/routes/auth.php';
 require_once __DIR__ . '/routes/setup.php';
 require_once __DIR__ . '/routes/profile.php';
+require_once __DIR__ . '/routes/players.php';
 require_once __DIR__ . '/routes/teams.php';
 require_once __DIR__ . '/routes/friends.php';
 require_once __DIR__ . '/routes/chat.php';

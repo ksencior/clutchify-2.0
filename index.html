@@ -23,6 +23,7 @@
                 <button class="nav-btn active" onclick="router.navigate('dashboard')">Panel Główny</button>
                 <button class="nav-btn" onclick="router.navigate('teams')">Drużyny</button>
                 <button class="nav-btn" onclick="router.navigate('tournaments')">Turnieje</button>
+                <button class="nav-btn" onclick="router.navigate('players')">Gracze</button>
                 <button class="nav-btn" onclick="router.navigate('friends')">Znajomi i czat</button>
 
                 <button class="nav-btn admin-only" onclick="router.navigate('admin')" style="display: none;">
@@ -52,7 +53,10 @@
         <div class="drawer-header">
             <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
                 Powiadomienia
-                <span id="drawer-count" style="background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 10px; font-size: 12px;">0</span>
+                <span
+                    id="drawer-count"
+                    style="display: none; background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 10px; font-size: 12px;"
+                >0</span>
             </h3>
             <button id="btn-close-drawer" class="btn-cancel" style="padding: 5px 12px; margin: 0;">&times;</button>
         </div>
@@ -64,7 +68,7 @@
                 type="button"
             >
                 Powiadomienia
-                <span id="activity-notifications-count">0</span>
+                <span id="activity-notifications-count" style="display: none;">0</span>
             </button>
 
             <button
@@ -74,7 +78,7 @@
                 type="button"
             >
                 Wiadomości
-                <span id="activity-messages-count">0</span>
+                <span id="activity-messages-count" style="display: none;">0</span>
             </button>
         </div>
         <div id="drawer-content" class="drawer-content">

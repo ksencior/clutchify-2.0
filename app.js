@@ -13,12 +13,15 @@ import { profileController } from './controllers/ProfileController.js';
 import { friendsController } from './controllers/FriendsController.js';
 import { settingsController } from './controllers/SettingsController.js';
 import { adminController } from './controllers/AdminController.js';
+import { playersController } from './controllers/PlayersController.js';
 
 window.authController = authController;
 window.setupController = setupController;
 window.friendsController = friendsController;
 window.settingsController = settingsController;
 window.adminController = adminController;
+window.playersController = playersController;
+window.notificationController = notificationController;
 
 window.wsClient = null;
 window.onlineUsers = new Set();
@@ -66,6 +69,13 @@ window.apiFetch = async (url, options = {}) => {
 
     return response;
 }
+
+window.bootstrapLoggedInServices = async () => {
+    if (!AppState.isLoggedIn()) return;
+
+    notificationController.init();
+    window.initWebSocket?.();
+};
 
 window.Sound = {
     enabled: localStorage.getItem('notifySoundEnabled') !== 'false',
@@ -218,11 +228,14 @@ window.initWebSocket = () => {
             if (String(getViewedProfileId()) === changedUserId) {
                 setProfileStatusDot(data.status);
             }
+
+            window.playersController?.refreshOnlineStatuses?.();
         }
 
         if (data.action === 'initial_status_list') {
             window.onlineUsers = new Set((data.users || []).map(id => String(id)));
             window.applyCurrentProfileStatus();
+            window.playersController?.refreshOnlineStatuses?.();
         }
     };
 
@@ -318,6 +331,17 @@ const ViewSkeletons = {
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <div class="skeleton-box" style="height: 420px; border-radius: 18px;"></div>
                 <div class="skeleton-box" style="height: 420px; border-radius: 18px;"></div>
+            </div>
+        </div>
+    `,
+    players: `
+        <div style="max-width: 1120px; margin: 0 auto;">
+            <div class="skeleton-box" style="height: 140px; border-radius: 18px; margin-bottom: 20px;"></div>
+            <div class="skeleton-box" style="height: 120px; border-radius: 18px; margin-bottom: 20px;"></div>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div class="skeleton-box" style="height: 130px; border-radius: 16px;"></div>
+                <div class="skeleton-box" style="height: 130px; border-radius: 16px;"></div>
+                <div class="skeleton-box" style="height: 130px; border-radius: 16px;"></div>
             </div>
         </div>
     `,
@@ -428,6 +452,8 @@ const router = {
             await friendsController.init();
         } else if (viewName === 'settings') {
             await settingsController.init();
+        } else if (viewName === 'players') {
+            await playersController.init();
         } else if (viewName === 'admin') {
             await adminController.init();
         }
@@ -516,6 +542,7 @@ const Popout = {
             }
 
             Popout.onClose = null;
+            Popout.onConfirm = null;
         }, {once: true});
         bg.classList.remove('active');
     },
@@ -533,6 +560,7 @@ const Popout = {
             }
 
             Popout.onClose = null;
+            Popout.onConfirm = null;
         }, {once: true});
         bg.classList.remove('active');
     }
@@ -551,10 +579,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await authController.checkSession();
 
-    if (AppState.isLoggedIn()) {
-        notificationController.init();
-        window.initWebSocket();
-    }
+    await window.bootstrapLoggedInServices?.();
     
     const currentPath = window.location.pathname.replace('/', ''); 
     const defaultView = currentPath ? currentPath : 'dashboard';

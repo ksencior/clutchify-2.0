@@ -88,7 +88,8 @@ export const authController = {
 
             if (data.success) {
                 await authController.checkSession();
-                window.initWebSocket?.();
+                await window.bootstrapLoggedInServices?.();
+
                 const res = await fetch('api.php?action=check-for-configuration');
                 const confData = await res.json();
 
@@ -116,6 +117,7 @@ export const authController = {
         }
 
         window.onlineUsers?.clear();
+        window.notificationController?.reset?.();
 
         if (AppState.clear) {
             AppState.clear();
