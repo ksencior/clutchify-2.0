@@ -317,6 +317,8 @@ export const tournamentViewController = {
 
                 ${tournamentViewController.renderBracketTeam(match, 'a')}
                 ${tournamentViewController.renderBracketTeam(match, 'b')}
+
+                ${tournamentViewController.renderMatchLobbyAction(match)}
             </article>
         `;
     },
@@ -346,6 +348,43 @@ export const tournamentViewController = {
                 ${isWinner ? '<strong>WIN</strong>' : ''}
             </div>
         `;
+    },
+
+    renderBracketMatch: (match) => {
+        return `
+            <article class="bracket-match status-${window.escapeHTML(match.status)}">
+                <div class="bracket-match-header">
+                    <span>Mecz #${Number(match.match_number)}</span>
+                    <strong>${window.escapeHTML(tournamentViewController.matchStatusLabel(match.status))}</strong>
+                </div>
+
+                ${tournamentViewController.renderBracketTeam(match, 'a')}
+                ${tournamentViewController.renderBracketTeam(match, 'b')}
+                ${tournamentViewController.renderMatchLobbyAction(match)}
+            </article>
+        `;
+    },
+
+    renderMatchLobbyAction: (match) => {
+        const hasBothTeams = !!match.team_a_id && !!match.team_b_id;
+
+        if (!hasBothTeams) {
+            return '';
+        }
+
+        return `
+            <div class="bracket-match-actions">
+                <button class="btn-ok compact" onclick="tournamentViewController.openMatchLobby(${Number(match.id)})">
+                    Otwórz lobby
+                </button>
+            </div>
+        `;
+    },
+
+    openMatchLobby: (matchId) => {
+        window.router.navigate('match', true, {
+            id: Number(matchId)
+        });
     },
 
     roundLabel: (roundNumber, finalRound) => {

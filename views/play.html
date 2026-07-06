@@ -1,0 +1,29 @@
+<div class="play-page">
+    <section class="play-hero">
+        <div>
+            <span class="eyebrow">Clutchify game center</span>
+            <h1>Graj</h1>
+            <p id="play-team-hint">Tu zobaczysz aktywne mecze swojej drużyny.</p>
+        </div>
+
+        <div class="play-hero-stat">
+            <strong id="play-active-count">0</strong>
+            <span>aktywne mecze</span>
+        </div>
+    </section>
+
+    <section class="play-section">
+        <div class="tournament-section-heading">
+            <div>
+                <h2>Twoje mecze</h2>
+                <p>Lobby, ready check i szybki powrót do aktywnych spotkań.</p>
+            </div>
+
+            <button class="btn-ok" onclick="playController.load()">Odśwież</button>
+        </div>
+
+        <div id="play-matches-list" class="play-matches-list">
+            <div class="empty-state">Ładowanie meczów...</div>
+        </div>
+    </section>
+</div>

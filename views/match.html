@@ -1,0 +1,43 @@
+<div class="match-lobby-page">
+    <section class="match-lobby-hero">
+        <div>
+            <span class="eyebrow" id="match-lobby-tournament">Turniej</span>
+            <h1 id="match-lobby-title">Ładowanie lobby...</h1>
+            <p id="match-lobby-round">Runda - • Mecz #-</p>
+        </div>
+
+        <div class="match-lobby-hero-side">
+            <span id="match-lobby-status" class="match-lobby-status">Status</span>
+            <button class="btn-ok compact" onclick="matchLobbyController.openTournament()">Turniej</button>
+        </div>
+    </section>
+
+    <section class="match-ready-card">
+        <div class="match-ready-head">
+            <div>
+                <span class="eyebrow">Ready check</span>
+                <h2>Gotowość graczy</h2>
+            </div>
+
+            <strong id="match-lobby-ready-count">0/0</strong>
+        </div>
+
+        <div class="match-ready-track">
+            <div id="match-lobby-ready-bar"></div>
+        </div>
+
+        <div id="match-lobby-player-controls" class="match-player-controls"></div>
+    </section>
+
+    <div class="match-lobby-grid">
+        <section id="match-lobby-team-a" class="match-team-card">
+            <div class="empty-state">Ładowanie drużyny A...</div>
+        </section>
+
+        <section id="match-lobby-team-b" class="match-team-card">
+            <div class="empty-state">Ładowanie drużyny B...</div>
+        </section>
+    </div>
+
+    <div id="match-lobby-admin-controls"></div>
+</div>

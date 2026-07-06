@@ -142,7 +142,11 @@ function csrfProtectedActions(): array {
         'review_tournament_team',
         'close_tournament_registration',
         'reopen_tournament_registration',
-        'generate_bracket'
+        'generate_bracket',
+
+        'set_player_ready',
+        'reset_ready_check',
+        'start_match'
     ];
 }
 

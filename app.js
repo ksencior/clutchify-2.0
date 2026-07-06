@@ -14,6 +14,8 @@ import { friendsController } from './controllers/FriendsController.js';
 import { settingsController } from './controllers/SettingsController.js';
 import { adminController } from './controllers/AdminController.js';
 import { playersController } from './controllers/PlayersController.js';
+import { playController } from './controllers/PlayController.js';
+import { matchLobbyController } from './controllers/MatchLobbyController.js';
 
 window.authController = authController;
 window.setupController = setupController;
@@ -22,6 +24,8 @@ window.settingsController = settingsController;
 window.adminController = adminController;
 window.playersController = playersController;
 window.notificationController = notificationController;
+window.playController = playController;
+window.matchLobbyController = matchLobbyController;
 
 window.wsClient = null;
 window.onlineUsers = new Set();
@@ -292,6 +296,21 @@ window.initWebSocket = () => {
             window.applyCurrentProfileStatus();
             window.playersController?.refreshOnlineStatuses?.();
         }
+
+        if (data.action === 'match_lobby_update') {
+            const matchId = Number(data.match_id || 0);
+
+            if (
+                window.matchLobbyController?.currentId
+                && Number(window.matchLobbyController.currentId) === matchId
+            ) {
+                window.matchLobbyController.load?.();
+            }
+
+            if (window.playController?.load) {
+                window.playController.load();
+            }
+        }
     };
 
     window.wsClient.onclose = () => {
@@ -400,6 +419,22 @@ const ViewSkeletons = {
             </div>
         </div>
     `,
+    play: `
+    <div style="max-width: 1120px; margin: 0 auto;">
+        <div class="skeleton-box" style="height: 150px; border-radius: 18px; margin-bottom: 20px;"></div>
+        <div class="skeleton-box" style="height: 360px; border-radius: 18px;"></div>
+    </div>
+    `,
+    match: `
+        <div style="max-width: 1180px; margin: 0 auto;">
+            <div class="skeleton-box" style="height: 180px; border-radius: 18px; margin-bottom: 20px;"></div>
+            <div class="skeleton-box" style="height: 160px; border-radius: 18px; margin-bottom: 20px;"></div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="skeleton-box" style="height: 420px; border-radius: 18px;"></div>
+                <div class="skeleton-box" style="height: 420px; border-radius: 18px;"></div>
+            </div>
+        </div>
+    `,
     default: `
         <div style="padding: 40px; max-width: 800px; margin: 0 auto;">
             <div class="skeleton-box" style="height: 40px; width: 40%; margin-bottom: 30px;"></div>
@@ -495,9 +530,17 @@ const router = {
                             `/profile`
                         );
                     }
+                } else if (viewName === 'match') {
+                    const id = params.id || matchLobbyController.currentId || new URLSearchParams(location.search).get('id');
+
+                    history.pushState(
+                        { view: 'match', id },
+                        '',
+                        `/match?id=${encodeURIComponent(id)}`
+                    );
                 } else {
                     history.pushState({view: viewName}, '', `/${viewName}`);
-               }
+                }
             }
             document.title = `${viewName.toUpperCase()} | Clutchify.gg`
             router.initView(viewName);
@@ -511,7 +554,8 @@ const router = {
             btn.classList.remove('active');
         })
 
-        const activeBtn = document.querySelector(`button[onclick="router.navigate('${viewName}')"]`);
+        const navViewName = viewName === 'match' ? 'play' : viewName;
+        const activeBtn = document.querySelector(`button[onclick="router.navigate('${navViewName}')"]`);
         if (activeBtn) activeBtn.classList.add('active');
     },
     initView: async (viewName) => {
@@ -535,6 +579,10 @@ const router = {
             await playersController.init();
         } else if (viewName === 'admin') {
             await adminController.init();
+        } else if (viewName === 'play') {
+            await playController.init();
+        } else if (viewName === 'match') {
+            await matchLobbyController.init();
         }
     }
 };
@@ -684,6 +732,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         initialParams = {
             id: urlParams.get('id'),
             username: urlParams.get('username')
+        };
+    } else if (defaultView === 'tournament' || defaultView === 'match') {
+        initialParams = {
+            id: urlParams.get('id')
         };
     }
 

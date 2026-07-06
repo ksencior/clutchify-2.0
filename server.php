@@ -136,6 +136,31 @@ class NotificationServer implements MessageComponentInterface {
                 'users' => $onlineUsers
             ]));
         }
+
+        if (($data->type ?? null) === 'match_lobby_update') {
+            $matchId = isset($data->matchId) && is_numeric($data->matchId)
+                ? (int)$data->matchId
+                : 0;
+
+            $targetIds = [];
+
+            if (isset($data->targetIds) && is_array($data->targetIds)) {
+                $targetIds = $data->targetIds;
+            }
+
+            foreach ($targetIds as $targetId) {
+                if (!is_numeric($targetId)) {
+                    continue;
+                }
+
+                $this->sendToUser((int)$targetId, [
+                    'action' => 'match_lobby_update',
+                    'match_id' => $matchId
+                ]);
+            }
+
+            return;
+        }
     }
 
     public function onClose(ConnectionInterface $conn) {

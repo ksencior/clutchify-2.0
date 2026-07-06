@@ -25,5 +25,6 @@ require_once __DIR__ . '/routes/notifications.php';
 require_once __DIR__ . '/routes/admin.php';
 require_once __DIR__ . '/routes/tournaments.php';
 require_once __DIR__ . '/routes/activity.php';
+require_once __DIR__ . '/routes/matches.php';
 
 jsonError('Nieznana akcja API: ' . $action, 404);
