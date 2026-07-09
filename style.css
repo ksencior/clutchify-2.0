@@ -3358,6 +3358,11 @@ html.auth-mode .sidebar {
     margin-top: 14px;
 }
 
+#btn-practice-start[disabled] {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 @media (max-width: 820px) {
     .practice-head,
     .practice-grid,

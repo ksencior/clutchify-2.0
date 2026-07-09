@@ -136,6 +136,10 @@ export const playController = {
         const controls = document.getElementById('practice-controls');
         const connectEl = document.getElementById('practice-connect-string');
         const serverList = document.getElementById('practice-server-list');
+        const startPracticeBtn = document.getElementById('btn-practice-start');
+        const changePracticeMapBtn = document.getElementById('btn-practice-change-map');
+
+        const quota = data.daily_quota || null;
 
         if (!serverSelect || !mapSelect || !statusText || !statusPill) return;
 
@@ -175,15 +179,29 @@ export const playController = {
             mapSelect.value = data.session.map_name;
         }
 
+        if (startPracticeBtn) {
+            const hasActiveSession = !!data.session;
+            const canStartByQuota = !quota || quota.is_admin || Number(quota.remaining || 0) > 0;
+
+            startPracticeBtn.disabled = !hasActiveSession && !canStartByQuota;
+            startPracticeBtn.textContent = !hasActiveSession && !canStartByQuota
+                ? 'Limit wykorzystany'
+                : 'Start';
+        }
+
         if (data.session) {
-            statusText.textContent = `Twoja sesja: ${data.server?.name || 'Serwer'} • ${data.session.map_name}`;
+            statusText.textContent = `Twoja sesja: ${data.server?.name || 'Serwer'} • ${data.session.map_name}. ${playController.practiceQuotaText(quota)}`;
             statusPill.textContent = 'TWOJA SESJA';
             statusPill.className = 'practice-pill is-live';
 
             if (activePanel) activePanel.style.display = 'grid';
             if (connectEl) connectEl.textContent = data.connect || 'connect ...';
             if (controls) controls.style.display = 'flex';
+            if (startPracticeBtn) startPracticeBtn.style.display = 'none';
+            if (changePracticeMapBtn) changePracticeMapBtn.style.display = 'flex';
         } else {
+            const quotaText = playController.practiceQuotaText(quota);
+
             statusText.textContent = freeServers.length
                 ? `Wolne serwery: ${freeServers.length}/${servers.length}.`
                 : 'Brak wolnych serwerów practice.';
@@ -193,6 +211,8 @@ export const playController = {
 
             if (activePanel) activePanel.style.display = 'none';
             if (controls) controls.style.display = 'none';
+            if (startPracticeBtn) startPracticeBtn.style.display = 'flex';
+            if (changePracticeMapBtn) changePracticeMapBtn.style.display = 'none';
         }
 
         if (serverList) {
@@ -200,6 +220,16 @@ export const playController = {
                 ? servers.map(server => playController.renderPracticeServer(server)).join('')
                 : '<div class="empty-state">Brak skonfigurowanych serwerów practice.</div>';
         }
+    },
+
+    practiceQuotaText: (quota) => {
+        if (!quota) return '';
+
+        if (quota.is_admin) {
+            return 'Admin: brak limitu sesji practice.';
+        }
+
+        return `Limit dzienny: ${Number(quota.used || 0)}/${Number(quota.limit || 0)} wykorzystane.`;
     },
 
     renderPracticeServer: (server) => {

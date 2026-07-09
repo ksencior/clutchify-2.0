@@ -378,14 +378,6 @@ function profileBadges(array $profile, array $completeness): array {
         ];
     }
 
-    if ($completeness['percent'] >= 100) {
-        $badges[] = [
-            'type' => 'complete',
-            'label' => 'Profil 100%',
-            'description' => 'Uzupełniony profil gracza'
-        ];
-    }
-
     if (!empty($profile['steam_id'])) {
         $badges[] = [
             'type' => 'steam',

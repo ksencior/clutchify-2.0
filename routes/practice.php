@@ -9,6 +9,51 @@ function practiceEnabled(): bool {
     return env('PRACTICE_ENABLED', '0') === '1';
 }
 
+function practiceGenerateJoinPassword(): string {
+    /**
+     * Tylko bezpieczne znaki: bez spacji, średników, cudzysłowów.
+     */
+    return 'CF-' . strtoupper(bin2hex(random_bytes(4)));
+}
+
+function practicePasswordCommand(string $password): string {
+    if ($password !== '' && !preg_match('/^[A-Za-z0-9_-]{4,32}$/', $password)) {
+        throw new RuntimeException('Nieprawidłowe hasło sesji practice.');
+    }
+
+    return 'sv_password "' . $password . '"';
+}
+
+function practiceSessionJoinPassword(array $session): string {
+    $encrypted = trim((string)($session['connect_password_encrypted'] ?? ''));
+
+    if ($encrypted !== '') {
+        return decryptSecret($encrypted);
+    }
+
+    return trim((string)($session['connect_password'] ?? ''));
+}
+
+function practiceServerDefaultPassword(array $server): string {
+    return trim((string)($server['connect_password'] ?? ''));
+}
+
+function practiceShouldRotatePassword(array $server): bool {
+    return (int)($server['rotate_password_per_session'] ?? 1) === 1;
+}
+
+function practiceConnectStringFromSession(array $session): string {
+    $connect = 'connect ' . $session['public_address'];
+
+    $password = practiceSessionJoinPassword($session);
+
+    if ($password !== '') {
+        $connect .= '; password ' . $password;
+    }
+
+    return $connect;
+}
+
 function practiceMaps(): array {
     return [
         'de_mirage' => 'Mirage',
@@ -36,13 +81,46 @@ function practiceExpireOldSessions(PDO $pdo): void {
     $minutes = practiceSessionMinutes();
 
     $stmt = $pdo->prepare("
-        UPDATE practice_sessions
-        SET status = 'expired',
-            ended_at = NOW()
-        WHERE status = 'active'
-          AND started_at < (NOW() - INTERVAL {$minutes} MINUTE)
+        SELECT
+            ps.id AS session_id,
+
+            gs.id,
+            gs.name,
+            gs.connect_password,
+            gs.rcon_host,
+            gs.rcon_port,
+            gs.rcon_password_env,
+            gs.rcon_password_encrypted,
+            gs.rotate_password_per_session
+        FROM practice_sessions ps
+        JOIN game_servers gs ON gs.id = ps.game_server_id
+        WHERE ps.status = 'active'
+          AND ps.started_at < (NOW() - INTERVAL {$minutes} MINUTE)
     ");
     $stmt->execute();
+
+    $expired = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($expired as $server) {
+        try {
+            practiceRunCommands($server, [
+                'say [Clutchify] Practice session expired',
+                'bot_kick',
+                practicePasswordCommand(practiceServerDefaultPassword($server))
+            ]);
+        } catch (Throwable $e) {
+            error_log('[Clutchify] Nie udało się zresetować hasła wygasłej sesji practice #' . $server['session_id'] . ': ' . $e->getMessage());
+        }
+
+        $stmt = $pdo->prepare("
+            UPDATE practice_sessions
+            SET status = 'expired',
+                ended_at = NOW()
+            WHERE id = ?
+              AND status = 'active'
+        ");
+        $stmt->execute([(int)$server['session_id']]);
+    }
 }
 
 function practiceGameServers(PDO $pdo): array {
@@ -83,7 +161,7 @@ function practiceGameServers(PDO $pdo): array {
             ? (int)$server['active_user_id']
             : null;
 
-        unset($server['rcon_password_env'], $server['rcon_password_encrypted']);
+        unset($server['rcon_password_env'], $server['rcon_password_encrypted'], $server['connect_password']);
     }
 
     return $servers;
@@ -258,13 +336,22 @@ function practiceStatusPayload(PDO $pdo, int $userId): array {
         }
     }
 
+    $connect = $mySession ? practiceConnectStringFromSession($mySession) : null;
+    if ($mySession) {
+    unset(
+        $mySession['connect_password'],
+        $mySession['connect_password_encrypted']
+    );
+}
+
     return [
         'enabled' => practiceEnabled(),
         'maps' => practiceMaps(),
         'servers' => $servers,
         'session' => $mySession,
         'server' => $myServer,
-        'connect' => $mySession ? practiceConnectStringFromServer($mySession) : null
+        'connect' => $connect,
+        'daily_quota' => practiceCanStartToday($pdo, $userId)
     ];
 }
 
@@ -284,6 +371,58 @@ function practiceCurrentServerForUser(PDO $pdo, int $userId): array {
     return [$session, $server];
 }
 
+function practiceDailyLimitForNonAdmin(): int {
+    return max(0, (int)env('PRACTICE_DAILY_LIMIT_NON_ADMIN', '1'));
+}
+
+function practiceUserStartsToday(PDO $pdo, int $userId): int {
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM practice_sessions
+        WHERE user_id = ?
+          AND started_at >= CURDATE()
+          AND started_at < (CURDATE() + INTERVAL 1 DAY)
+    ");
+    $stmt->execute([$userId]);
+
+    return (int)$stmt->fetchColumn();
+}
+
+function practiceCanStartToday(PDO $pdo, int $userId): array {
+    if (practiceIsAdmin($pdo, $userId)) {
+        return [
+            'allowed' => true,
+            'limit' => null,
+            'used' => 0,
+            'remaining' => null,
+            'is_admin' => true
+        ];
+    }
+
+    $limit = practiceDailyLimitForNonAdmin();
+
+    if ($limit <= 0) {
+        return [
+            'allowed' => false,
+            'limit' => 0,
+            'used' => practiceUserStartsToday($pdo, $userId),
+            'remaining' => 0,
+            'is_admin' => false
+        ];
+    }
+
+    $used = practiceUserStartsToday($pdo, $userId);
+    $remaining = max(0, $limit - $used);
+
+    return [
+        'allowed' => $remaining > 0,
+        'limit' => $limit,
+        'used' => $used,
+        'remaining' => $remaining,
+        'is_admin' => false
+    ];
+}
+
 if ($action === 'get_practice_status') {
     $userId = requireUserId();
 
@@ -298,6 +437,16 @@ if ($action === 'start_practice') {
     }
 
     practiceExpireOldSessions($pdo);
+
+    $existingUserSession = practiceActiveSessionForUser($pdo, $userId);
+
+    if (!$existingUserSession) {
+        $quota = practiceCanStartToday($pdo, $userId);
+
+        if (!$quota['allowed']) {
+            jsonError('Wykorzystałeś dzisiejszy limit practice. Spróbuj ponownie jutro.');
+        }
+    }
 
     $input = getJsonInput();
 
@@ -331,9 +480,31 @@ if ($action === 'start_practice') {
     }
 
     try {
-        /**
-         * Kończymy poprzednią aktywną sesję tego usera, żeby user miał max 1 practice naraz.
-         */
+        $joinPassword = practiceShouldRotatePassword($server)
+            ? practiceGenerateJoinPassword()
+            : practiceServerDefaultPassword($server);
+
+        $joinPasswordEncrypted = $joinPassword !== ''
+            ? encryptSecret($joinPassword)
+            : null;
+
+        $previousSession = practiceActiveSessionForUser($pdo, $userId);
+
+        if ($previousSession) {
+            $previousServer = practiceGetGameServer($pdo, (int)$previousSession['game_server_id']);
+
+            if ($previousServer) {
+                try {
+                    practiceRunCommands($previousServer, [
+                        'say [Clutchify] Previous practice session closed',
+                        practicePasswordCommand(practiceServerDefaultPassword($previousServer))
+                    ]);
+                } catch (Throwable $e) {
+                    error_log('[Clutchify] Nie udało się zresetować hasła poprzedniej sesji practice: ' . $e->getMessage());
+                }
+            }
+        }
+
         $stmt = $pdo->prepare("
             UPDATE practice_sessions
             SET status = 'ended',
@@ -345,20 +516,23 @@ if ($action === 'start_practice') {
 
         practiceRunCommands($server, [
             'say [Clutchify] Practice mode loading...',
+            practicePasswordCommand($joinPassword),
             'changelevel ' . $map
         ]);
 
         $stmt = $pdo->prepare("
-            INSERT INTO practice_sessions (user_id, game_server_id, map_name)
-            VALUES (?, ?, ?)
+            INSERT INTO practice_sessions (user_id, game_server_id, map_name, connect_password_encrypted)
+            VALUES (?, ?, ?, ?)
         ");
         $stmt->execute([
             $userId,
             (int)$server['id'],
-            $map
+            $map,
+            $joinPasswordEncrypted
         ]);
 
         practiceRunCommands($server, [
+            practicePasswordCommand($joinPassword),
             'exec clutchify_prac',
             'say [Clutchify] Practice mode ON'
         ]);
@@ -413,12 +587,14 @@ if ($action === 'practice_action') {
         ]
     ];
 
+    $sessionPassword = practiceSessionJoinPassword($session);
     if ($practiceAction === 'change_map') {
         if (!isset($maps[$map])) {
             jsonError('Nieprawidłowa mapa.');
         }
 
         $actions['change_map'] = [
+            practicePasswordCommand($sessionPassword),
             'say [Clutchify] Changing map to ' . $map,
             'changelevel ' . $map
         ];
@@ -461,7 +637,8 @@ if ($action === 'end_practice') {
     try {
         practiceRunCommands($server, [
             'say [Clutchify] Practice session ended',
-            'bot_kick'
+            'bot_kick',
+            practicePasswordCommand(practiceServerDefaultPassword($server))
         ]);
 
         $stmt = $pdo->prepare("

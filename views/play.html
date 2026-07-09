@@ -34,8 +34,12 @@
                 <select id="practice-map"></select>
             </label>
 
-            <button class="btn-confirm" onclick="playController.startPractice()">
-                Start practice
+            <button id="btn-practice-start" class="btn-confirm" onclick="playController.startPractice()">
+                Start
+            </button>
+
+            <button id="btn-practice-change-map" class="btn-confirm" onclick="playController.practiceAction('change_map')" style="display: none;">
+                Zmień mapę
             </button>
         </div>
 
@@ -63,16 +67,16 @@
     </section>
 
     <section class="play-section">
-        <div class="tournament-section-heading">
+        <div class="tournament-section-heading" style="display: flex; align-items: center;">
             <div>
                 <h2>Twoje mecze</h2>
                 <p>Lobby, ready check i szybki powrót do aktywnych spotkań.</p>
             </div>
 
-            <button class="btn-ok" onclick="playController.load()">Odśwież</button>
+            <button class="btn-ok" onclick="playController.load()" style="margin: 0; margin-left: auto;">Odśwież</button>
         </div>
 
-        <div id="play-matches-list" class="play-matches-list">
+        <div id="play-matches-list" class="play-matches-list" style="margin-top: 20px;">
             <div class="empty-state">Ładowanie meczów...</div>
         </div>
     </section>

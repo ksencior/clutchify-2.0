@@ -163,8 +163,6 @@ export const playersController = {
                         <p>${esc(player.bio || 'Ten gracz nie dodał jeszcze opisu profilu.')}</p>
 
                         <div class="player-directory-tags">
-                            <span>${player.faceit_level ? `Faceit ${Number(player.faceit_level)}` : 'Faceit -'}</span>
-                            <span>${esc(player.region || 'EU')}</span>
                             <span>${esc(player.school || 'Brak szkoły / org.')}</span>
                         </div>
 
