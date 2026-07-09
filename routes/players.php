@@ -117,7 +117,7 @@ if ($action === 'get_players_directory') {
 
         if ($player['bio'] != NULL && $player['bio'] != '') {
             if (mb_strlen($player['bio']) > 60) {
-                $player['bio'] = substr($player['bio'], 0, 60) . '...';
+                $player['bio'] = htmlspecialchars(substr($player['bio'], 0, 60) . '...');
             }
         }
 
