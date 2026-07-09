@@ -30,6 +30,7 @@ require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../classes/Auth.php';
 require_once __DIR__ . '/../classes/User.php';
 require_once __DIR__ . '/../helpers/ws_auth.php';
+require_once __DIR__ . '/../helpers/secrets.php';
 
 $auth = new Auth($pdo);
 $action = $_GET['action'] ?? '';
@@ -152,6 +153,7 @@ function csrfProtectedActions(): array {
         'leave_team',
         'delete_team',
         'kick_player',
+        'request_join_team',
 
         'ensure_connection',
 
@@ -165,7 +167,12 @@ function csrfProtectedActions(): array {
 
         'set_player_ready',
         'reset_ready_check',
-        'start_match'
+        'start_match',
+
+        'test_practice_rcon',
+        'start_practice',
+        'practice_action',
+        'end_practice'
     ];
 }
 

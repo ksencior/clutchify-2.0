@@ -10,6 +10,10 @@
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
+    # Social preview dla /u/username — Discord/FB/Twitter/Slack itd.
+    RewriteCond %{HTTP_USER_AGENT} (Discordbot|facebookexternalhit|Twitterbot|Slackbot|TelegramBot|WhatsApp|LinkedInBot) [NC]
+    RewriteRule ^u/([A-Za-z0-9_.-]{3,24})/?$ share-profile.php?username=$1 [L,QSA]
+
     # SPA fallback: /dashboard, /profile, /u/username itd.
     RewriteRule ^ index.html [L,QSA]
 </IfModule>

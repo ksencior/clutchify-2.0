@@ -1,14 +1,63 @@
 <?php
 if ($action === 'get_teams') {
-    try {
-        $stmt = $pdo->query("SELECT id, name, tag, logo, is_open FROM teams WHERE is_open = 1 ORDER BY id DESC");
-        $teams = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        echo json_encode($teams);
-    } catch (PDOException $e) {
-        echo json_encode(['error' => 'Błąd bazy danych: ' . $e->getMessage()]);
+    $userId = requireUserId();
+
+    $stmt = $pdo->prepare("
+        SELECT team_id
+        FROM players
+        WHERE user_id = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$userId]);
+    $viewerTeamId = $stmt->fetchColumn();
+
+    $stmt = $pdo->prepare("
+        SELECT
+            t.id,
+            t.name,
+            t.tag,
+            t.logo,
+            t.is_open,
+            t.captain_id,
+
+            captain.username AS captain_username,
+
+            (
+                SELECT COUNT(*)
+                FROM players p
+                WHERE p.team_id = t.id
+            ) AS members_count,
+
+            (
+                SELECT tjr.status
+                FROM team_join_requests tjr
+                WHERE tjr.team_id = t.id
+                  AND tjr.requester_user_id = ?
+                ORDER BY tjr.id DESC
+                LIMIT 1
+            ) AS join_request_status
+        FROM teams t
+        JOIN users captain ON captain.id = t.captain_id
+        WHERE t.is_open = 1
+        ORDER BY t.id DESC
+    ");
+
+    $stmt->execute([$userId]);
+    $teams = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($teams as &$team) {
+        $team['id'] = (int)$team['id'];
+        $team['captain_id'] = (int)$team['captain_id'];
+        $team['is_open'] = (bool)$team['is_open'];
+        $team['members_count'] = (int)$team['members_count'];
+        $team['is_full'] = $team['members_count'] >= 6;
+        $team['viewer_has_team'] = $viewerTeamId !== false && $viewerTeamId !== null;
+        $team['join_request_status'] = $team['join_request_status'] ?: null;
     }
-    exit; }
+
+    echo json_encode($teams);
+    exit;
+}
 if ($action === 'get_my_team') {
     if (!isset($_SESSION['user_id'])) {
         echo json_encode(['error' => 'Niezalogowany']);
@@ -193,7 +242,122 @@ if ($action === 'invite_player') {
 
     echo json_encode(['success' => true, 'message' => "Zaproszenie zostało wysłane do gracza $targetUsername!", 'targetId' => $targetUser['id']]);
     exit; }
+if ($action === 'request_join_team') {
+    $userId = requireUserId();
+    $input = getJsonInput();
 
+    $teamId = (int)($input['team_id'] ?? 0);
+
+    if ($teamId <= 0) {
+        jsonError('Nieprawidłowa drużyna.');
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT
+            u.username,
+            p.team_id
+        FROM users u
+        JOIN players p ON p.user_id = u.id
+        WHERE u.id = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$userId]);
+    $requester = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$requester) {
+        jsonError('Nie znaleziono profilu gracza.', 404);
+    }
+
+    if ($requester['team_id'] !== null) {
+        jsonError('Należysz już do drużyny. Najpierw ją opuść.');
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT
+            t.id,
+            t.name,
+            t.tag,
+            t.is_open,
+            t.captain_id,
+            captain.username AS captain_username
+        FROM teams t
+        JOIN users captain ON captain.id = t.captain_id
+        WHERE t.id = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$teamId]);
+    $team = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$team) {
+        jsonError('Drużyna nie istnieje.', 404);
+    }
+
+    if (!(bool)$team['is_open']) {
+        jsonError('Ta drużyna nie prowadzi otwartej rekrutacji.');
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM players
+        WHERE team_id = ?
+    ");
+    $stmt->execute([$teamId]);
+
+    if ((int)$stmt->fetchColumn() >= 6) {
+        jsonError('Skład tej drużyny jest już pełny.');
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT id
+        FROM team_join_requests
+        WHERE team_id = ?
+          AND requester_user_id = ?
+          AND status = 'pending'
+        LIMIT 1
+    ");
+    $stmt->execute([$teamId, $userId]);
+
+    if ($stmt->fetch()) {
+        jsonError('Masz już wysłaną prośbę do tej drużyny.');
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $stmt = $pdo->prepare("
+            INSERT INTO team_join_requests (team_id, requester_user_id)
+            VALUES (?, ?)
+        ");
+        $stmt->execute([$teamId, $userId]);
+
+        $requestId = (int)$pdo->lastInsertId();
+
+        $safeUsername = htmlspecialchars($requester['username'], ENT_QUOTES, 'UTF-8');
+        $safeTeamName = htmlspecialchars($team['name'], ENT_QUOTES, 'UTF-8');
+
+        $message = "Gracz <strong>{$safeUsername}</strong> chce dołączyć do drużyny <strong>{$safeTeamName}</strong>.";
+
+        $stmt = $pdo->prepare("
+            INSERT INTO notifications (user_id, type, reference_id, message)
+            VALUES (?, 'team_join_request', ?, ?)
+        ");
+        $stmt->execute([
+            (int)$team['captain_id'],
+            $requestId,
+            $message
+        ]);
+
+        $pdo->commit();
+
+        jsonSuccess([
+            'message' => 'Prośba o dołączenie została wysłana do lidera.',
+            'targetId' => (int)$team['captain_id']
+        ]);
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        jsonError('Nie udało się wysłać prośby o dołączenie.');
+    }
+}
 if ($action === 'leave_team') {
     if (!isset($_SESSION['user_id'])) exit;
     $stmt = $pdo->prepare("SELECT t.id, t.captain_id FROM teams t JOIN players p ON t.id = p.team_id WHERE p.user_id = ?");

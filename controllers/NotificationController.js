@@ -170,7 +170,7 @@ export const notificationController = {
     renderNotificationCard: (notif) => {
         let actions = '';
 
-        if (notif.type === 'team_invite' || notif.type === 'friend_request') {
+        if (['team_invite', 'team_join_request', 'friend_request'].includes(notif.type)) {
             actions = `
                 <button
                     class="btn-confirm compact"
@@ -277,6 +277,7 @@ export const notificationController = {
         const labels = {
             team_invite: 'Zaproszenie do drużyny',
             friend_request: 'Zaproszenie do znajomych',
+            team_join_request: 'Prośba o dołączenie',
             system: 'System'
         };
 
@@ -300,6 +301,13 @@ export const notificationController = {
                 window.Toast.show(data.message, action === 'accept' ? 'success' : 'info');
 
                 await notificationController.load();
+
+                if (data.targetId && window.wsClient?.readyState === WebSocket.OPEN) {
+                    window.wsClient.send(JSON.stringify({
+                        type: 'notify',
+                        targetId: Number(data.targetId)
+                    }));
+                }
 
                 if (action === 'accept' && window.location.pathname.includes('teams')) {
                     window.teamController?.loadCurrentTeamState();

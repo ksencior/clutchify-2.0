@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "65c9a8f87141c77ac44bfffa60df8163",
+    "content-hash": "f87fd6b2d657246cf08892c0c550dcd6",
     "packages": [
         {
             "name": "cboden/ratchet",
@@ -1382,6 +1382,49 @@
                 }
             ],
             "time": "2026-05-24T11:18:16+00:00"
+        },
+        {
+            "name": "thedudeguy/rcon",
+            "version": "v1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/thedudeguy/PHP-Minecraft-Rcon.git",
+                "reference": "ada4eb08304dfe9562192978444fbfc21a08a9ca"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/thedudeguy/PHP-Minecraft-Rcon/zipball/ada4eb08304dfe9562192978444fbfc21a08a9ca",
+                "reference": "ada4eb08304dfe9562192978444fbfc21a08a9ca",
+                "shasum": ""
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Thedudeguy\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Chris Churchwell",
+                    "email": "chris@chrischurchwell.com",
+                    "homepage": "http://chrischurchwell.com"
+                }
+            ],
+            "description": "Simple Rcon class for php.",
+            "homepage": "https://github.com/thedudeguy/PHP-Minecraft-Rcon",
+            "keywords": [
+                "minecraft",
+                "rcon"
+            ],
+            "support": {
+                "issues": "https://github.com/thedudeguy/PHP-Minecraft-Rcon/issues",
+                "source": "https://github.com/thedudeguy/PHP-Minecraft-Rcon/tree/master"
+            },
+            "time": "2017-05-25T06:50:00+00:00"
         }
     ],
     "packages-dev": [],
@@ -1392,5 +1435,5 @@
     "prefer-lowest": false,
     "platform": {},
     "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.6.0"
 }

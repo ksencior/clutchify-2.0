@@ -12,6 +12,56 @@
         </div>
     </section>
 
+    <section class="practice-card">
+        <div class="practice-head">
+            <div>
+                <span class="eyebrow">Practice</span>
+                <h2>Solo</h2>
+                <p id="practice-status-text">Ładowanie statusu serwerów...</p>
+            </div>
+
+            <span id="practice-status-pill" class="practice-pill">Status</span>
+        </div>
+
+        <div class="practice-grid">
+            <label>
+                Serwer
+                <select id="practice-server"></select>
+            </label>
+
+            <label>
+                Mapa
+                <select id="practice-map"></select>
+            </label>
+
+            <button class="btn-confirm" onclick="playController.startPractice()">
+                Start practice
+            </button>
+        </div>
+
+        <div id="practice-active-panel" class="practice-active-panel" style="display:none;">
+            <div>
+                <strong>Connect</strong>
+                <code id="practice-connect-string">connect ...</code>
+            </div>
+
+            <button class="btn-ok compact" onclick="playController.copyPracticeConnect()">
+                Kopiuj connect
+            </button>
+        </div>
+
+        <div id="practice-controls" class="practice-controls" style="display:none;">
+            <button class="btn-ok compact" onclick="playController.practiceAction('practice_cfg')">Reload CFG</button>
+            <button class="btn-ok compact" onclick="playController.practiceAction('restart')">Restart rundy</button>
+            <button class="btn-ok compact" onclick="playController.practiceAction('kick_bots')">Kick boty</button>
+            <button class="btn-ok compact" onclick="playController.practiceAction('add_bot_ct')">Bot CT</button>
+            <button class="btn-ok compact" onclick="playController.practiceAction('add_bot_t')">Bot T</button>
+            <button class="btn-ok compact" onclick="playController.practiceAction('pause')">Pause</button>
+            <button class="btn-ok compact" onclick="playController.practiceAction('unpause')">Unpause</button>
+            <button class="btn-cancel compact" onclick="playController.endPractice()">Koniec practice</button>
+        </div>
+    </section>
+
     <section class="play-section">
         <div class="tournament-section-heading">
             <div>

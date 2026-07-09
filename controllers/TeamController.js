@@ -76,28 +76,112 @@ export const teamController = {
                 return;
             }
 
-            listContainer.innerHTML = teams.map(team => `
-                <div class="team-card" style="background: var(--bg-card); padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-                    <div style="display:flex; align-items:center; gap: 15px;">
-                        <img src="${team.logo}" style="width:40px; height:40px; border-radius:6px; background:#222; object-fit:cover;">
-                        <div>
-                            <span style="background: rgba(255,0,43,0.1); color: var(--brand-red); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-right: 10px;">${team.tag}</span>
-                            <strong style="font-size: 16px;">${team.name}</strong>
+            listContainer.innerHTML = teams.map(team => {
+                const logo = team.logo || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(team.name || 'Team')}`;
+                const members = Number(team.members_count || 0);
+                const isFull = !!team.is_full;
+                const requestStatus = team.join_request_status;
+
+                return `
+                    <div class="team-card open-team-card">
+                        <div class="open-team-main">
+                            <img src="${window.escapeHTML(logo)}" alt="Logo drużyny">
+
+                            <div>
+                                <div class="open-team-title">
+                                    <span>${window.escapeHTML(team.tag || 'TEAM')}</span>
+                                    <strong>${window.escapeHTML(team.name || 'Drużyna')}</strong>
+                                </div>
+
+                                <small>
+                                    Lider: ${window.escapeHTML(team.captain_username || 'Nieznany')}
+                                    • Skład: ${members}/6
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="open-team-actions">
+                            ${teamController.renderJoinAction(team)}
                         </div>
                     </div>
-                    <button class="nav-btn apply-action-btn" data-team="${team.name}" style="background: rgba(255,255,255,0.05); padding: 6px 12px; font-size: 11px;">Aplikuj</button>
-                </div>
-            `).join('');
-
-            // Podpięcie eventów pod dynamiczne przyciski "Aplikuj"
-            listContainer.querySelectorAll('.apply-action-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    window.Toast.show(`Pomyślnie wysłano podanie do ${btn.getAttribute('data-team')}!`, 'success');
-                });
-            });
+                `;
+            }).join('');
 
         } catch (err) {
             listContainer.innerHTML = '<p style="color: var(--brand-red);">Błąd ładowania otwartych drużyn.</p>';
+        }
+    },
+    renderJoinAction: (team) => {
+        const status = team.join_request_status;
+
+        if (team.viewer_has_team) {
+            return `
+                <button class="btn-ok compact" disabled>
+                    Masz drużynę
+                </button>
+            `;
+        }
+
+        if (team.is_full) {
+            return `
+                <button class="btn-cancel compact" disabled>
+                    Pełny skład
+                </button>
+            `;
+        }
+
+        if (status === 'pending') {
+            return `
+                <button class="btn-ok compact" disabled>
+                    Wysłano prośbę
+                </button>
+            `;
+        }
+
+        if (status === 'rejected') {
+            return `
+                <button class="btn-confirm compact" onclick="teamController.requestJoinTeam(${Number(team.id)})">
+                    Aplikuj ponownie
+                </button>
+            `;
+        }
+
+        return `
+            <button class="btn-confirm compact" onclick="teamController.requestJoinTeam(${Number(team.id)})">
+                Aplikuj
+            </button>
+        `;
+    },
+
+    requestJoinTeam: async (teamId) => {
+        try {
+            const response = await window.apiFetch('api.php?action=request_join_team', {
+                method: 'POST',
+                body: JSON.stringify({
+                    team_id: Number(teamId)
+                })
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                window.Toast.show(data.message || 'Nie udało się wysłać prośby.', 'error');
+                return;
+            }
+
+            window.Toast.show(data.message || 'Wysłano prośbę do lidera.', 'success');
+
+            if (data.targetId && window.wsClient?.readyState === WebSocket.OPEN) {
+                window.wsClient.send(JSON.stringify({
+                    type: 'notify',
+                    targetId: Number(data.targetId)
+                }));
+            }
+
+            await teamController.loadOpenTeams();
+        } catch (error) {
+            console.error(error);
+            window.Toast.show('Błąd podczas wysyłania prośby.', 'error');
         }
     },
 
