@@ -182,8 +182,8 @@ if ($action === 'update_profile_settings') {
         jsonError('Bio może mieć maksymalnie 500 znaków.');
     }
 
-    if (mb_strlen($availability) > 255) {
-        jsonError('Dostępność może mieć maksymalnie 255 znaków.');
+    if (mb_strlen($availability) > 80) {
+        jsonError('Dostępność może mieć maksymalnie 80 znaków.');
     }
 
     if (mb_strlen($school) > 120) {

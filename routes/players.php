@@ -115,6 +115,12 @@ if ($action === 'get_players_directory') {
         $player['preferred_role'] = $player['preferred_role'] ?: 'unknown';
         $player['preferred_role_label'] = playerRoleLabel($player['preferred_role']);
 
+        if ($player['bio'] != NULL && $player['bio'] != '') {
+            if (mb_strlen($player['bio']) > 60) {
+                $player['bio'] = substr($player['bio'], 0, 60) . '...';
+            }
+        }
+
         if ((int)$player['id'] === $viewerId) {
             $player['friend_status'] = 'me';
             $player['friendship_id'] = null;

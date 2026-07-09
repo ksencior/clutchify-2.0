@@ -53,11 +53,13 @@ if ($action === 'send_message') {
         exit;
     }
 
+    $timestamp = date('Y-m-d H:i:s');
+
     $stmt = $pdo->prepare("
-        INSERT INTO private_messages (sender_id, receiver_id, body)
-        VALUES (?, ?, ?)
+        INSERT INTO private_messages (sender_id, receiver_id, body, created_at)
+        VALUES (?, ?, ?, ?)
     ");
-    $stmt->execute([$userId, $receiverId, $body]);
+    $stmt->execute([$userId, $receiverId, $body, $timestamp]);
 
     echo json_encode([
         'success' => true,

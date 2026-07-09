@@ -1187,6 +1187,7 @@ html.auth-mode .sidebar {
 .chat-bubble p {
     line-height: 1.45;
     font-size: 14px;
+    overflow-wrap: break-word;
 }
 
 .chat-bubble span {
