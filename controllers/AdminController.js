@@ -36,6 +36,7 @@ export const adminController = {
             adminController.renderTeams(data.latest_teams);
             adminController.renderTournaments(data.latest_tournaments);
             adminController.renderActivity(data.latest_activity);
+            adminController.renderGameServers(data.game_servers);
         } catch (error) {
             console.error(error);
             window.Toast.show('Nie udało się połączyć z API admina.', 'error');
@@ -76,7 +77,12 @@ export const adminController = {
                 label: 'Wiadomości dziś',
                 value: stats.messages_today,
                 hint: `${stats.activity_today} aktywności dziś`
-            }
+            },
+            {
+                label: 'Serwery CS',
+                value: stats.game_servers_enabled,
+                hint: `${stats.game_servers_total || 0} wszystkich • ${stats.practice_sessions_active || 0} aktywnych practice`
+            },
         ];
 
         container.innerHTML = cards.map(card => `
@@ -240,6 +246,219 @@ export const adminController = {
                 </div>
             </article>
         `).join('');
+    },
+    renderGameServers: (items = []) => {
+        const container = document.getElementById('admin-game-servers');
+        if (!container) return;
+
+        adminController.gameServers = items;
+
+        if (!items.length) {
+            container.innerHTML = '<div class="empty-state">Brak skonfigurowanych serwerów CS.</div>';
+            return;
+        }
+
+        container.innerHTML = items.map(server => `
+            <article class="admin-game-server-row ${server.is_enabled ? '' : 'is-disabled'}">
+                <div class="admin-game-server-main">
+                    <div>
+                        <strong>
+                            ${esc(server.name)}
+                            <span class="admin-server-purpose">${adminController.serverPurposeLabel(server.purpose)}</span>
+                        </strong>
+
+                        <p>
+                            Public: ${esc(server.public_address)}
+                            • RCON: ${esc(server.rcon_host)}:${Number(server.rcon_port || 0)}
+                        </p>
+
+                        <small>
+                            Hasło RCON: ${adminController.rconModeLabel(server.rcon_password_mode)}
+                            • Hasło sesji: ${server.rotate_password_per_session ? 'rotowane' : 'stałe'}
+                            ${server.active_practice_session_id
+                                ? ` • Practice: ${esc(server.active_practice_username || 'gracz')} / ${esc(server.active_practice_map || '-')}`
+                                : ''}
+                        </small>
+                    </div>
+                </div>
+
+                <div class="admin-game-server-status">
+                    <span class="${server.is_enabled ? 'is-online' : 'is-off'}">
+                        ${server.is_enabled ? 'Aktywny' : 'Wyłączony'}
+                    </span>
+
+                    ${server.active_practice_session_id ? '<span class="is-busy">Zajęty</span>' : '<span class="is-free">Wolny</span>'}
+                </div>
+
+                <div class="admin-game-server-actions">
+                    <button class="btn-ok compact" onclick="adminController.testGameServer(${Number(server.id)})">
+                        Test RCON
+                    </button>
+
+                    <button class="btn-ok compact" onclick="adminController.editGameServer(${Number(server.id)})">
+                        Edytuj
+                    </button>
+
+                    <button class="btn-cancel compact" onclick="adminController.deleteGameServer(${Number(server.id)})">
+                        Wyłącz
+                    </button>
+                </div>
+            </article>
+        `).join('');
+    },
+
+    serverPurposeLabel: (purpose) => {
+        const labels = {
+            practice: 'Practice',
+            match: 'Match',
+            both: 'Both'
+        };
+
+        return labels[purpose] || 'Both';
+    },
+
+    rconModeLabel: (mode) => {
+        const labels = {
+            db: 'DB encrypted',
+            env: 'ENV fallback',
+            missing: 'brak'
+        };
+
+        return labels[mode] || 'brak';
+    },
+
+    resetGameServerForm: () => {
+        const form = document.getElementById('admin-game-server-form');
+        if (!form) return;
+
+        form.reset();
+
+        document.getElementById('admin-server-id').value = '';
+        document.getElementById('admin-server-purpose').value = 'practice';
+        document.getElementById('admin-server-rcon-host').value = '127.0.0.1';
+        document.getElementById('admin-server-rcon-port').value = '27015';
+        document.getElementById('admin-server-rotate-password').checked = true;
+        document.getElementById('admin-server-enabled').checked = true;
+    },
+
+    editGameServer: (id) => {
+        const server = (adminController.gameServers || []).find(item => Number(item.id) === Number(id));
+
+        if (!server) {
+            window.Toast.show('Nie znaleziono serwera.', 'error');
+            return;
+        }
+
+        document.getElementById('admin-server-id').value = server.id;
+        document.getElementById('admin-server-name').value = server.name || '';
+        document.getElementById('admin-server-purpose').value = server.purpose || 'practice';
+        document.getElementById('admin-server-public').value = server.public_address || '';
+        document.getElementById('admin-server-connect-password').value = server.connect_password || '';
+        document.getElementById('admin-server-rcon-host').value = server.rcon_host || '127.0.0.1';
+        document.getElementById('admin-server-rcon-port').value = server.rcon_port || 27015;
+        document.getElementById('admin-server-rcon-password').value = '';
+        document.getElementById('admin-server-rcon-env').value = server.rcon_password_env || '';
+        document.getElementById('admin-server-rotate-password').checked = !!server.rotate_password_per_session;
+        document.getElementById('admin-server-enabled').checked = !!server.is_enabled;
+
+        document.getElementById('admin-game-server-form')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+        });
+    },
+
+    gameServerPayload: () => {
+        return {
+            id: Number(document.getElementById('admin-server-id')?.value || 0),
+            name: document.getElementById('admin-server-name')?.value || '',
+            purpose: document.getElementById('admin-server-purpose')?.value || 'practice',
+            public_address: document.getElementById('admin-server-public')?.value || '',
+            connect_password: document.getElementById('admin-server-connect-password')?.value || '',
+            rcon_host: document.getElementById('admin-server-rcon-host')?.value || '127.0.0.1',
+            rcon_port: Number(document.getElementById('admin-server-rcon-port')?.value || 27015),
+            rcon_password: document.getElementById('admin-server-rcon-password')?.value || '',
+            rcon_password_env: document.getElementById('admin-server-rcon-env')?.value || '',
+            rotate_password_per_session: document.getElementById('admin-server-rotate-password')?.checked ? 1 : 0,
+            is_enabled: document.getElementById('admin-server-enabled')?.checked ? 1 : 0
+        };
+    },
+
+    saveGameServer: async (event) => {
+        event.preventDefault();
+
+        try {
+            const response = await window.apiFetch('api.php?action=save_admin_game_server', {
+                method: 'POST',
+                body: JSON.stringify(adminController.gameServerPayload())
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                window.Toast.show(data.message || 'Nie udało się zapisać serwera.', 'error');
+                return;
+            }
+
+            window.Toast.show(data.message || 'Serwer zapisany.', 'success');
+
+            adminController.resetGameServerForm();
+            await adminController.load();
+        } catch (error) {
+            console.error(error);
+            window.Toast.show('Błąd podczas zapisywania serwera.', 'error');
+        }
+    },
+
+    testGameServer: async (id) => {
+        try {
+            const response = await window.apiFetch('api.php?action=test_admin_game_server_rcon', {
+                method: 'POST',
+                body: JSON.stringify({ id: Number(id) })
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                window.Toast.show(data.message || 'Test RCON nie powiódł się.', 'error');
+                return;
+            }
+
+            console.log('RCON test response:', data.response);
+            window.Toast.show(`RCON działa • ${Number(data.duration_ms || 0)} ms`, 'success');
+        } catch (error) {
+            console.error(error);
+            window.Toast.show('Błąd testu RCON.', 'error');
+        }
+    },
+
+    deleteGameServer: (id) => {
+        window.Popout.create(
+            'Wyłączyć serwer?',
+            'Serwer zostanie wyłączony i nie będzie wybierany do nowych sesji. Historia practice zostanie zachowana.',
+            null,
+            async () => {
+                try {
+                    const response = await window.apiFetch('api.php?action=delete_admin_game_server', {
+                        method: 'POST',
+                        body: JSON.stringify({ id: Number(id) })
+                    });
+
+                    const data = await response.json();
+
+                    if (!data.success) {
+                        window.Toast.show(data.message || 'Nie udało się wyłączyć serwera.', 'error');
+                        return;
+                    }
+
+                    window.Toast.show(data.message || 'Serwer wyłączony.', 'success');
+                    await adminController.load();
+                } catch (error) {
+                    console.error(error);
+                    window.Toast.show('Błąd podczas wyłączania serwera.', 'error');
+                }
+            },
+            'confirm'
+        );
     },
 
     openTournament: (id) => {

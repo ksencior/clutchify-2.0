@@ -25,6 +25,65 @@ function getAppOrigin() {
     return new URL(APP_URL).origin;
 }
 
+function validateServerAddress(address) {
+    const value = String(address || '').trim();
+
+    const match = value.match(/^([a-zA-Z0-9.-]+):(\d{1,5})$/);
+
+    if (!match) {
+        throw new Error('Nieprawidłowy adres serwera.');
+    }
+
+    const host = match[1];
+    const port = Number(match[2]);
+
+    if (host.length < 3 || host.length > 180 || port < 1 || port > 65535) {
+        throw new Error('Nieprawidłowy adres serwera.');
+    }
+
+    return `${host}:${port}`;
+}
+
+function validateServerPassword(password) {
+    const value = String(password || '').trim();
+
+    if (value === '') {
+        return '';
+    }
+
+    if (!/^[A-Za-z0-9_-]{4,32}$/.test(value)) {
+        throw new Error('Nieprawidłowe hasło serwera.');
+    }
+
+    return value;
+}
+
+function buildCS2LaunchUri(payload) {
+    const address = validateServerAddress(payload?.address);
+    const password = validateServerPassword(payload?.password);
+
+    /**
+     * CS2 appid = 730.
+     * Nie używamy czystego steam://connect, tylko start gry z launch args.
+     */
+    let uri = `steam://rungameid/730//+connect ${address}`;
+
+    if (password) {
+        uri += ` +password ${password}`;
+    }
+
+    return uri;
+}
+
+function isTrustedAppUrl(rawUrl) {
+    try {
+        const url = new URL(rawUrl);
+        return url.origin === getAppOrigin();
+    } catch (_) {
+        return false;
+    }
+}
+
 function getDesktopSession() {
     return session.fromPartition(DESKTOP_PARTITION);
 }
@@ -369,4 +428,34 @@ app.on('before-quit', () => {
 app.on('window-all-closed', () => {
     // Trzymamy aplikację w trayu.
     // Pełne wyjście tylko przez "Zamknij Clutchify".
+});
+
+ipcMain.handle('steam:connect', async (event, payload) => {
+    const senderUrl = event.senderFrame?.url || event.sender.getURL();
+
+    if (!isTrustedAppUrl(senderUrl)) {
+        return {
+            success: false,
+            message: 'Nieautoryzowane źródło połączenia.'
+        };
+    }
+
+    try {
+        const steamUri = buildCS2LaunchUri(payload);
+
+        console.log('[Clutchify] Opening Steam URI:', steamUri);
+
+        await shell.openExternal(steamUri);
+
+        return {
+            success: true
+        };
+    } catch (error) {
+        console.error('[Clutchify] steam:connect-cs2 failed:', error);
+
+        return {
+            success: false,
+            message: error.message || 'Nie udało się uruchomić CS2.'
+        };
+    }
 });

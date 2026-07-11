@@ -321,6 +321,170 @@ function practiceRunCommands(array $server, array $commands): array {
     return $responses;
 }
 
+function practiceRconCommand(array $server, string $command): string {
+    $host = (string)$server['rcon_host'];
+    $port = (int)$server['rcon_port'];
+    $password = gameServerRconPassword($server);
+    $timeout = (int)env('PRACTICE_RCON_TIMEOUT', '5');
+
+    $rcon = new Rcon($host, $port, $password, $timeout);
+
+    if (!$rcon->connect()) {
+        throw new RuntimeException("Nie można połączyć się z RCON {$host}:{$port}.");
+    }
+
+    $response = $rcon->sendCommand($command);
+
+    return is_string($response) ? trim($response) : '';
+}
+
+function practiceNormalizeMapName(?string $map): ?string {
+    $map = strtolower(trim((string)$map));
+
+    if ($map === '') {
+        return null;
+    }
+
+    $map = trim($map, "\"' \t\n\r\0\x0B");
+    $map = str_replace('\\', '/', $map);
+
+    /**
+     * Gdyby status kiedyś zwrócił ścieżkę typu workshop/123/de_mirage
+     * albo maps/de_mirage, bierzemy końcową nazwę mapy.
+     */
+    if (str_contains($map, '/')) {
+        $parts = array_values(array_filter(explode('/', $map)));
+        $map = end($parts) ?: $map;
+    }
+
+    return preg_match('/^[a-z0-9_]+$/', $map) ? $map : null;
+}
+
+function practiceExtractMapFromStatus(string $status): ?string {
+    /**
+     * CS2 / SourceTV format:
+     * Game Time 00:01, Mod "csgo", Map "de_mirage"
+     */
+    if (preg_match('/\bMap\s+"([^"]+)"/i', $status, $match)) {
+        return practiceNormalizeMapName($match[1]);
+    }
+
+    /**
+     * CS2 spawngroup format:
+     * loaded spawngroup(  1)  : SV:  [1: de_mirage | main lump | mapload]
+     *
+     * Bierzemy tylko spawngroup 1, bo kolejne linie mają prefaby:
+     * maps/prefabs/de_mirage/3dskybox...
+     */
+    if (preg_match('/loaded\s+spawngroup\(\s*1\s*\)\s*:\s*SV:\s*\[\s*1:\s*([a-zA-Z0-9_]+)/i', $status, $match)) {
+        return practiceNormalizeMapName($match[1]);
+    }
+
+    /**
+     * Starszy fallback:
+     * map : de_mirage
+     */
+    if (preg_match('/^\s*map\s*:\s*([a-zA-Z0-9_]+)/mi', $status, $match)) {
+        return practiceNormalizeMapName($match[1]);
+    }
+
+    /**
+     * Inny fallback:
+     * map=de_mirage
+     */
+    if (preg_match('/\bmap\s*=\s*([a-zA-Z0-9_]+)/i', $status, $match)) {
+        return practiceNormalizeMapName($match[1]);
+    }
+
+    return null;
+}
+
+function practiceCurrentMap(array $server): ?string {
+    $status = practiceRconCommand($server, 'status');
+
+    return practiceExtractMapFromStatus($status);
+}
+
+function practiceWaitForMap(array $server, string $expectedMap): void {
+    $expectedMap = practiceNormalizeMapName($expectedMap);
+
+    if (!$expectedMap) {
+        throw new RuntimeException('Nieprawidłowa oczekiwana mapa.');
+    }
+
+    $timeout = max(5, min(90, (int)env('PRACTICE_MAP_LOAD_TIMEOUT', '35')));
+    $pollMs = max(250, min(5000, (int)env('PRACTICE_MAP_LOAD_POLL_MS', '1000')));
+    $afterDelayMs = max(0, min(10000, (int)env('PRACTICE_AFTER_MAP_DELAY_MS', '1500')));
+
+    $deadline = microtime(true) + $timeout;
+    $lastMap = null;
+    $lastError = null;
+
+    while (microtime(true) < $deadline) {
+        try {
+            $currentMap = practiceCurrentMap($server);
+
+            if ($currentMap !== null) {
+                $lastMap = $currentMap;
+            }
+
+            if ($currentMap === $expectedMap) {
+                if ($afterDelayMs > 0) {
+                    usleep($afterDelayMs * 1000);
+                }
+
+                return;
+            }
+        } catch (Throwable $e) {
+            /**
+             * Podczas changelevel RCON może chwilowo nie odpowiadać.
+             * To normalne, więc retry.
+             */
+            $lastError = $e->getMessage();
+        }
+
+        usleep($pollMs * 1000);
+    }
+
+    $detail = $lastMap
+        ? "Ostatnia wykryta mapa: {$lastMap}."
+        : "Nie udało się odczytać mapy z komendy status.";
+
+    if ($lastError) {
+        $detail .= " Ostatni błąd RCON: {$lastError}";
+    }
+
+    throw new RuntimeException("Timeout ładowania mapy {$expectedMap}. {$detail}");
+}
+
+function practiceChangeMapAndRunAfterLoad(
+    array $server,
+    string $map,
+    string $joinPassword,
+    array $afterLoadCommands
+): array {
+    $responses = [];
+
+    $responses = array_merge($responses, practiceRunCommands($server, [
+        'say [Clutchify] Loading map ' . $map . '...',
+        practicePasswordCommand($joinPassword),
+        'changelevel ' . $map
+    ]));
+
+    practiceWaitForMap($server, $map);
+
+    $commandsAfterLoad = array_merge(
+        [
+            practicePasswordCommand($joinPassword)
+        ],
+        $afterLoadCommands
+    );
+
+    $responses = array_merge($responses, practiceRunCommands($server, $commandsAfterLoad));
+
+    return $responses;
+}
+
 function practiceStatusPayload(PDO $pdo, int $userId): array {
     $mySession = practiceActiveSessionForUser($pdo, $userId);
     $servers = practiceGameServers($pdo);
@@ -337,12 +501,22 @@ function practiceStatusPayload(PDO $pdo, int $userId): array {
     }
 
     $connect = $mySession ? practiceConnectStringFromSession($mySession) : null;
+
+    $desktopConnect = null;
+
     if ($mySession) {
-    unset(
-        $mySession['connect_password'],
-        $mySession['connect_password_encrypted']
-    );
-}
+        $desktopConnect = [
+            'address' => (string)$mySession['public_address'],
+            'password' => practiceSessionJoinPassword($mySession),
+            'server_name' => (string)($mySession['server_name'] ?? 'Practice Server'),
+            'map_name' => (string)($mySession['map_name'] ?? '')
+        ];
+
+        unset(
+            $mySession['connect_password'],
+            $mySession['connect_password_encrypted']
+        );
+    }
 
     return [
         'enabled' => practiceEnabled(),
@@ -351,6 +525,7 @@ function practiceStatusPayload(PDO $pdo, int $userId): array {
         'session' => $mySession,
         'server' => $myServer,
         'connect' => $connect,
+        'desktop_connect' => $desktopConnect,
         'daily_quota' => practiceCanStartToday($pdo, $userId)
     ];
 }
@@ -480,6 +655,8 @@ if ($action === 'start_practice') {
     }
 
     try {
+        $newSessionId = 0;
+
         $joinPassword = practiceShouldRotatePassword($server)
             ? practiceGenerateJoinPassword()
             : practiceServerDefaultPassword($server);
@@ -514,12 +691,6 @@ if ($action === 'start_practice') {
         ");
         $stmt->execute([$userId]);
 
-        practiceRunCommands($server, [
-            'say [Clutchify] Practice mode loading...',
-            practicePasswordCommand($joinPassword),
-            'changelevel ' . $map
-        ]);
-
         $stmt = $pdo->prepare("
             INSERT INTO practice_sessions (user_id, game_server_id, map_name, connect_password_encrypted)
             VALUES (?, ?, ?, ?)
@@ -530,10 +701,10 @@ if ($action === 'start_practice') {
             $map,
             $joinPasswordEncrypted
         ]);
+        $newSessionId = (int)$pdo->lastInsertId();
 
-        practiceRunCommands($server, [
-            practicePasswordCommand($joinPassword),
-            'exec clutchify_prac',
+        practiceChangeMapAndRunAfterLoad($server, $map, $joinPassword, [
+            'css_prac',
             'say [Clutchify] Practice mode ON'
         ]);
 
@@ -542,6 +713,25 @@ if ($action === 'start_practice') {
             'status' => practiceStatusPayload($pdo, $userId)
         ]);
     } catch (Throwable $e) {
+        if (!empty($newSessionId)) {
+            $stmt = $pdo->prepare("
+                UPDATE practice_sessions
+                SET status = 'ended',
+                    ended_at = NOW()
+                WHERE id = ?
+            ");
+            $stmt->execute([(int)$newSessionId]);
+        }
+
+        try {
+            practiceRunCommands($server, [
+                'say [Clutchify] Practice start failed',
+                practicePasswordCommand(practiceServerDefaultPassword($server))
+            ]);
+        } catch (Throwable $cleanupError) {
+            error_log('[Clutchify] Practice cleanup failed: ' . $cleanupError->getMessage());
+        }
+
         jsonError('Nie udało się wystartować practice: ' . $e->getMessage());
     }
 }
@@ -560,6 +750,8 @@ if ($action === 'practice_action') {
 
     $map = (string)($input['map'] ?? '');
     $maps = practiceMaps();
+    
+    $sessionPassword = practiceSessionJoinPassword($session);
 
     $actions = [
         'restart' => [
@@ -583,11 +775,11 @@ if ($action === 'practice_action') {
             'mp_unpause_match'
         ],
         'practice_cfg' => [
-            'exec clutchify_prac'
+            practicePasswordCommand($sessionPassword),
+            'css_prac'
         ]
     ];
 
-    $sessionPassword = practiceSessionJoinPassword($session);
     if ($practiceAction === 'change_map') {
         if (!isset($maps[$map])) {
             jsonError('Nieprawidłowa mapa.');
@@ -605,7 +797,14 @@ if ($action === 'practice_action') {
     }
 
     try {
-        $responses = practiceRunCommands($server, $actions[$practiceAction]);
+        if ($practiceAction === 'change_map') {
+            $responses = practiceChangeMapAndRunAfterLoad($server, $map, $sessionPassword, [
+                'css_prac',
+                'say [Clutchify] Practice mode ON'
+            ]);
+        } else {
+            $responses = practiceRunCommands($server, $actions[$practiceAction]);
+        }
 
         $stmt = $pdo->prepare("
             UPDATE practice_sessions
@@ -638,6 +837,7 @@ if ($action === 'end_practice') {
         practiceRunCommands($server, [
             'say [Clutchify] Practice session ended',
             'bot_kick',
+            'css_exitprac',
             practicePasswordCommand(practiceServerDefaultPassword($server))
         ]);
 

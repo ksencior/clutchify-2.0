@@ -138,6 +138,7 @@ export const playController = {
         const serverList = document.getElementById('practice-server-list');
         const startPracticeBtn = document.getElementById('btn-practice-start');
         const changePracticeMapBtn = document.getElementById('btn-practice-change-map');
+        const desktopConnectBtn = document.getElementById('practice-connect-desktop-btn');
 
         const quota = data.daily_quota || null;
 
@@ -199,6 +200,13 @@ export const playController = {
             if (controls) controls.style.display = 'flex';
             if (startPracticeBtn) startPracticeBtn.style.display = 'none';
             if (changePracticeMapBtn) changePracticeMapBtn.style.display = 'flex';
+
+            if (desktopConnectBtn) {
+                const canDesktopConnect = !!window.ClutchifyDesktop?.isDesktop && !!data.desktop_connect?.address;
+
+                desktopConnectBtn.style.display = canDesktopConnect ? 'inline-flex' : 'none';
+            }
+
         } else {
             const quotaText = playController.practiceQuotaText(quota);
 
@@ -213,6 +221,10 @@ export const playController = {
             if (controls) controls.style.display = 'none';
             if (startPracticeBtn) startPracticeBtn.style.display = 'flex';
             if (changePracticeMapBtn) changePracticeMapBtn.style.display = 'none';
+
+            if (desktopConnectBtn) {
+                desktopConnectBtn.style.display = 'none';
+            }
         }
 
         if (serverList) {
@@ -252,6 +264,12 @@ export const playController = {
     startPractice: async () => {
         const map = document.getElementById('practice-map')?.value || 'de_mirage';
         const serverId = Number(document.getElementById('practice-server')?.value || 0);
+        const startBtn = document.getElementById('btn-practice-start');
+
+        if (startBtn) {
+            startBtn.disabled = true;
+            startBtn.innerText = 'Ładowanie..';
+        }
 
         const response = await window.apiFetch('api.php?action=start_practice', {
             method: 'POST',
@@ -269,6 +287,10 @@ export const playController = {
         }
 
         window.Toast.show(data.message || 'Practice wystartował.', 'success');
+        if (startBtn) {
+            startBtn.disabled = false;
+            startBtn.innerText = 'Start';
+        }
 
         if (data.status) {
             playController.practiceStatus = data.status;
@@ -279,12 +301,18 @@ export const playController = {
     },
 
     practiceAction: async (practiceAction) => {
+        const changeBtn = document.getElementById('btn-practice-change-map');
+
         const payload = {
             practice_action: practiceAction
         };
 
         if (practiceAction === 'change_map') {
             payload.map = document.getElementById('practice-map')?.value || 'de_mirage';
+            if (changeBtn) {
+                changeBtn.disabled = true;
+                changeBtn.innerText = 'Ładowanie..';
+            }
         }
 
         const response = await window.apiFetch('api.php?action=practice_action', {
@@ -300,6 +328,10 @@ export const playController = {
         }
 
         window.Toast.show(data.message || 'Akcja wykonana.', 'success');
+        if (changeBtn) {
+            changeBtn.disabled = false;
+            changeBtn.innerText = 'Zmień mapę';
+        }
 
         if (data.status) {
             playController.practiceStatus = data.status;
@@ -341,6 +373,36 @@ export const playController = {
             window.Toast.show('Skopiowano connect string.', 'success');
         } catch (_) {
             window.Toast.show(connect, 'info');
+        }
+    },
+    desktopConnectPractice: async () => {
+        const payload = playController.practiceStatus?.desktop_connect;
+
+        if (!window.ClutchifyDesktop?.isDesktop) {
+            window.Toast.show('Automatyczne połączenie działa tylko w aplikacji desktopowej.', 'info');
+            return;
+        }
+
+        if (!payload?.address) {
+            window.Toast.show('Brak danych połączenia z serwerem.', 'error');
+            return;
+        }
+
+        try {
+            const result = await window.ClutchifyDesktop.connectToServer({
+                address: payload.address,
+                password: payload.password || ''
+            });
+
+            if (!result?.success) {
+                window.Toast.show(result?.message || 'Nie udało się uruchomić połączenia.', 'error');
+                return;
+            }
+
+            window.Toast.show('Uruchamiam połączenie przez Steam...', 'success');
+        } catch (error) {
+            console.error(error);
+            window.Toast.show('Nie udało się połączyć przez aplikację desktopową.', 'error');
         }
     },
     teamLabel: (tag, name, fallback = 'TBD') => {

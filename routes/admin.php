@@ -1,5 +1,10 @@
 <?php
 
+use Thedudeguy\Rcon;
+
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../helpers/secrets.php';
+
 function adminScalar(PDO $pdo, string $sql, array $params = []): int {
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
@@ -48,6 +53,157 @@ function adminColumnExists(PDO $pdo, string $table, string $column): bool {
     return (int)$stmt->fetchColumn() > 0;
 }
 
+function adminGameServerPurpose(string $purpose): string {
+    return in_array($purpose, ['practice', 'match', 'both'], true)
+        ? $purpose
+        : 'both';
+}
+
+function adminValidateGameServerInput(array $input, bool $isUpdate = false): array {
+    $name = trim((string)($input['name'] ?? ''));
+    $purpose = adminGameServerPurpose((string)($input['purpose'] ?? 'both'));
+    $publicAddress = trim((string)($input['public_address'] ?? ''));
+    $connectPassword = trim((string)($input['connect_password'] ?? ''));
+
+    $rconHost = trim((string)($input['rcon_host'] ?? '127.0.0.1'));
+    $rconPort = (int)($input['rcon_port'] ?? 27015);
+    $rconPassword = (string)($input['rcon_password'] ?? '');
+    $rconPasswordEnv = trim((string)($input['rcon_password_env'] ?? ''));
+
+    $rotatePassword = !empty($input['rotate_password_per_session']) ? 1 : 0;
+    $isEnabled = !empty($input['is_enabled']) ? 1 : 0;
+
+    if (mb_strlen($name) < 2 || mb_strlen($name) > 120) {
+        jsonError('Nazwa serwera musi mieć od 2 do 120 znaków.');
+    }
+
+    if ($publicAddress === '' || mb_strlen($publicAddress) > 190 || preg_match('/[\s;"\']/', $publicAddress)) {
+        jsonError('Nieprawidłowy publiczny adres serwera.');
+    }
+
+    if ($rconHost === '' || mb_strlen($rconHost) > 190 || preg_match('/[\s;"\']/', $rconHost)) {
+        jsonError('Nieprawidłowy RCON host.');
+    }
+
+    if ($rconPort < 1 || $rconPort > 65535) {
+        jsonError('Nieprawidłowy RCON port.');
+    }
+
+    if ($connectPassword !== '' && !preg_match('/^[A-Za-z0-9_-]{4,32}$/', $connectPassword)) {
+        jsonError('Hasło wejścia na serwer może mieć 4-32 znaki: litery, cyfry, _ albo -.');
+    }
+
+    if ($rconPasswordEnv !== '' && !preg_match('/^[A-Za-z_][A-Za-z0-9_]{0,119}$/', $rconPasswordEnv)) {
+        jsonError('Nieprawidłowa nazwa zmiennej ENV dla hasła RCON.');
+    }
+
+    if (!$isUpdate && $rconPassword === '' && $rconPasswordEnv === '') {
+        jsonError('Podaj hasło RCON albo ENV key.');
+    }
+
+    return [
+        'name' => $name,
+        'purpose' => $purpose,
+        'public_address' => $publicAddress,
+        'connect_password' => $connectPassword !== '' ? $connectPassword : null,
+        'rotate_password_per_session' => $rotatePassword,
+        'rcon_host' => $rconHost,
+        'rcon_port' => $rconPort,
+        'rcon_password' => $rconPassword,
+        'rcon_password_env' => $rconPasswordEnv !== '' ? $rconPasswordEnv : null,
+        'is_enabled' => $isEnabled
+    ];
+}
+
+function adminGameServers(PDO $pdo): array {
+    $stmt = $pdo->query("
+        SELECT
+            gs.*,
+
+            ps.id AS active_practice_session_id,
+            ps.user_id AS active_practice_user_id,
+            ps.map_name AS active_practice_map,
+            ps.started_at AS active_practice_started_at,
+
+            u.username AS active_practice_username
+        FROM game_servers gs
+        LEFT JOIN practice_sessions ps
+            ON ps.game_server_id = gs.id
+           AND ps.status = 'active'
+        LEFT JOIN users u
+            ON u.id = ps.user_id
+        ORDER BY gs.is_enabled DESC, gs.id ASC
+    ");
+
+    $servers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($servers as &$server) {
+        $server['id'] = (int)$server['id'];
+        $server['rcon_port'] = (int)$server['rcon_port'];
+        $server['is_enabled'] = (bool)$server['is_enabled'];
+        $server['rotate_password_per_session'] = (bool)($server['rotate_password_per_session'] ?? true);
+
+        $server['active_practice_session_id'] = $server['active_practice_session_id'] !== null
+            ? (int)$server['active_practice_session_id']
+            : null;
+
+        $server['active_practice_user_id'] = $server['active_practice_user_id'] !== null
+            ? (int)$server['active_practice_user_id']
+            : null;
+
+        $hasEncrypted = trim((string)($server['rcon_password_encrypted'] ?? '')) !== '';
+        $hasEnv = trim((string)($server['rcon_password_env'] ?? '')) !== '';
+
+        $server['has_rcon_password'] = $hasEncrypted || $hasEnv;
+        $server['rcon_password_mode'] = $hasEncrypted ? 'db' : ($hasEnv ? 'env' : 'missing');
+
+        unset($server['rcon_password_encrypted']);
+    }
+
+    return $servers;
+}
+
+function adminGetGameServerRaw(PDO $pdo, int $id): ?array {
+    $stmt = $pdo->prepare("
+        SELECT *
+        FROM game_servers
+        WHERE id = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$id]);
+
+    $server = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$server) {
+        return null;
+    }
+
+    $server['id'] = (int)$server['id'];
+    $server['rcon_port'] = (int)$server['rcon_port'];
+
+    return $server;
+}
+
+function adminRunGameServerRcon(array $server, string $command): string {
+    $password = gameServerRconPassword($server);
+    $timeout = (int)env('PRACTICE_RCON_TIMEOUT', '5');
+
+    $rcon = new Rcon(
+        (string)$server['rcon_host'],
+        (int)$server['rcon_port'],
+        $password,
+        $timeout
+    );
+
+    if (!$rcon->connect()) {
+        throw new RuntimeException("Nie można połączyć się z RCON {$server['rcon_host']}:{$server['rcon_port']}.");
+    }
+
+    $response = $rcon->sendCommand($command);
+
+    return is_string($response) ? trim($response) : '';
+}
+
 if ($action === 'get_admin_overview') {
     requireAdminUserId($pdo);
 
@@ -84,6 +240,17 @@ if ($action === 'get_admin_overview') {
         'activity_today' => $hasActivityEvents
             ? adminScalar($pdo, "SELECT COUNT(*) FROM activity_events WHERE DATE(created_at) = CURDATE()")
             : 0,
+        'game_servers_total' => adminTableExists($pdo, 'game_servers')
+            ? adminScalar($pdo, "SELECT COUNT(*) FROM game_servers")
+            : 0,
+
+        'game_servers_enabled' => adminTableExists($pdo, 'game_servers')
+            ? adminScalar($pdo, "SELECT COUNT(*) FROM game_servers WHERE is_enabled = 1")
+            : 0,
+
+        'practice_sessions_active' => adminTableExists($pdo, 'practice_sessions')
+            ? adminScalar($pdo, "SELECT COUNT(*) FROM practice_sessions WHERE status = 'active'")
+            : 0
     ];
 
     $stmt = $pdo->prepare("
@@ -242,6 +409,181 @@ if ($action === 'get_admin_overview') {
         'latest_tournaments' => $latestTournaments,
         'pending_requests' => $pendingRequests,
         'latest_activity' => $latestActivity,
+        'game_servers' => adminTableExists($pdo, 'game_servers') ? adminGameServers($pdo) : [],
         'server_time' => date('Y-m-d H:i:s')
     ]);
+}
+if ($action === 'save_admin_game_server') {
+    requireAdminUserId($pdo);
+
+    if (!adminTableExists($pdo, 'game_servers')) {
+        jsonError('Tabela game_servers nie istnieje. Uruchom migracje.');
+    }
+
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+
+    $isUpdate = $id > 0;
+    $data = adminValidateGameServerInput($input, $isUpdate);
+
+    $encryptedPassword = null;
+
+    if ($data['rcon_password'] !== '') {
+        $encryptedPassword = encryptSecret($data['rcon_password']);
+    }
+
+    if ($isUpdate) {
+        $existing = adminGetGameServerRaw($pdo, $id);
+
+        if (!$existing) {
+            jsonError('Serwer nie istnieje.', 404);
+        }
+
+        $finalEncryptedPassword = $encryptedPassword ?? ($existing['rcon_password_encrypted'] ?? null);
+        $finalEnvKey = $data['rcon_password_env'] ?? ($existing['rcon_password_env'] ?? null);
+
+        if (trim((string)$finalEncryptedPassword) === '' && trim((string)$finalEnvKey) === '') {
+            jsonError('Serwer musi mieć hasło RCON w DB albo fallback ENV key.');
+        }
+
+        $stmt = $pdo->prepare("
+            UPDATE game_servers
+            SET name = ?,
+                purpose = ?,
+                public_address = ?,
+                connect_password = ?,
+                rotate_password_per_session = ?,
+                rcon_host = ?,
+                rcon_port = ?,
+                rcon_password_env = ?,
+                rcon_password_encrypted = ?,
+                is_enabled = ?
+            WHERE id = ?
+        ");
+
+        $stmt->execute([
+            $data['name'],
+            $data['purpose'],
+            $data['public_address'],
+            $data['connect_password'],
+            $data['rotate_password_per_session'],
+            $data['rcon_host'],
+            $data['rcon_port'],
+            $finalEnvKey,
+            $finalEncryptedPassword,
+            $data['is_enabled'],
+            $id
+        ]);
+
+        jsonSuccess([
+            'message' => 'Serwer został zaktualizowany.',
+            'game_servers' => adminGameServers($pdo)
+        ]);
+    }
+
+    $stmt = $pdo->prepare("
+        INSERT INTO game_servers (
+            name,
+            purpose,
+            public_address,
+            connect_password,
+            rotate_password_per_session,
+            rcon_host,
+            rcon_port,
+            rcon_password_env,
+            rcon_password_encrypted,
+            is_enabled
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
+
+    $stmt->execute([
+        $data['name'],
+        $data['purpose'],
+        $data['public_address'],
+        $data['connect_password'],
+        $data['rotate_password_per_session'],
+        $data['rcon_host'],
+        $data['rcon_port'],
+        $data['rcon_password_env'],
+        $encryptedPassword,
+        $data['is_enabled']
+    ]);
+
+    jsonSuccess([
+        'message' => 'Serwer został dodany.',
+        'game_servers' => adminGameServers($pdo)
+    ]);
+}
+
+if ($action === 'delete_admin_game_server') {
+    requireAdminUserId($pdo);
+
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+
+    if ($id <= 0) {
+        jsonError('Nieprawidłowy serwer.');
+    }
+
+    $server = adminGetGameServerRaw($pdo, $id);
+
+    if (!$server) {
+        jsonError('Serwer nie istnieje.', 404);
+    }
+
+    $activePractice = adminScalar(
+        $pdo,
+        "SELECT COUNT(*) FROM practice_sessions WHERE game_server_id = ? AND status = 'active'",
+        [$id]
+    );
+
+    if ($activePractice > 0) {
+        jsonError('Nie można usunąć serwera, który ma aktywną sesję practice.');
+    }
+
+    /**
+     * Soft-delete: wyłączamy serwer, żeby nie rozwalić historii practice/meczów.
+     */
+    $stmt = $pdo->prepare("
+        UPDATE game_servers
+        SET is_enabled = 0
+        WHERE id = ?
+    ");
+    $stmt->execute([$id]);
+
+    jsonSuccess([
+        'message' => 'Serwer został wyłączony.',
+        'game_servers' => adminGameServers($pdo)
+    ]);
+}
+
+if ($action === 'test_admin_game_server_rcon') {
+    requireAdminUserId($pdo);
+
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+
+    if ($id <= 0) {
+        jsonError('Nieprawidłowy serwer.');
+    }
+
+    $server = adminGetGameServerRaw($pdo, $id);
+
+    if (!$server) {
+        jsonError('Serwer nie istnieje.', 404);
+    }
+
+    try {
+        $started = microtime(true);
+        $response = adminRunGameServerRcon($server, 'status');
+
+        jsonSuccess([
+            'message' => 'RCON działa.',
+            'duration_ms' => (int)round((microtime(true) - $started) * 1000),
+            'response' => mb_substr($response, 0, 3000)
+        ]);
+    } catch (Throwable $e) {
+        jsonError('RCON test failed: ' . $e->getMessage());
+    }
 }

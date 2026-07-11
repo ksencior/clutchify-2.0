@@ -5,7 +5,8 @@ contextBridge.exposeInMainWorld('ClutchifyDesktop', {
     minimize: () => ipcRenderer.send('window:minimize'),
     toggleMaximize: () => ipcRenderer.send('window:toggle-maximize'),
     closeToTray: () => ipcRenderer.send('window:close-to-tray'),
-    navigate: (path) => ipcRenderer.send('app:navigate', path)
+    navigate: (path) => ipcRenderer.send('app:navigate', path),
+    connectToServer: (payload) => ipcRenderer.invoke('steam:connect', payload)
 });
 
 function injectDesktopTitlebar() {

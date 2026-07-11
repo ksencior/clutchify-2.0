@@ -172,7 +172,11 @@ function csrfProtectedActions(): array {
         'test_practice_rcon',
         'start_practice',
         'practice_action',
-        'end_practice'
+        'end_practice',
+
+        'save_admin_game_server',
+        'delete_admin_game_server',
+        'test_admin_game_server_rcon'
     ];
 }
 

@@ -22,6 +22,94 @@
     </section>
 
     <section class="admin-grid">
+        <article class="admin-card admin-card-wide admin-server-card">
+            <div class="admin-card-header">
+                <div>
+                    <span class="eyebrow">CS infrastructure</span>
+                    <h2>Serwery CS</h2>
+                </div>
+
+                <button class="btn-ok compact" onclick="adminController.resetGameServerForm()">
+                    Nowy serwer
+                </button>
+            </div>
+
+            <form id="admin-game-server-form" class="admin-server-form" onsubmit="adminController.saveGameServer(event)">
+                <input type="hidden" id="admin-server-id" value="">
+
+                <div class="admin-server-form-grid">
+                    <label>
+                        Nazwa
+                        <input id="admin-server-name" type="text" maxlength="120" placeholder="Practice #1" required>
+                    </label>
+
+                    <label>
+                        Typ
+                        <select id="admin-server-purpose">
+                            <option value="practice">Practice</option>
+                            <option value="match">Match</option>
+                            <option value="both">Practice + Match</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Public address
+                        <input id="admin-server-public" type="text" maxlength="190" placeholder="twoj-vps.pl:27015" required>
+                    </label>
+
+                    <label>
+                        Domyślne hasło wejścia
+                        <input id="admin-server-connect-password" type="text" maxlength="32" placeholder="puste = brak">
+                    </label>
+
+                    <label>
+                        RCON host
+                        <input id="admin-server-rcon-host" type="text" maxlength="190" value="127.0.0.1" required>
+                    </label>
+
+                    <label>
+                        RCON port
+                        <input id="admin-server-rcon-port" type="number" min="1" max="65535" value="27015" required>
+                    </label>
+
+                    <label>
+                        Nowe hasło RCON
+                        <input id="admin-server-rcon-password" type="password" autocomplete="new-password" placeholder="puste przy edycji = bez zmian">
+                    </label>
+
+                    <label>
+                        Legacy ENV key
+                        <input id="admin-server-rcon-env" type="text" maxlength="120" placeholder="np. PRACTICE_RCON_PASSWORD">
+                    </label>
+                </div>
+
+                <div class="admin-server-switches">
+                    <label>
+                        <input id="admin-server-rotate-password" type="checkbox" checked>
+                        Generuj hasło wejścia per sesja
+                    </label>
+
+                    <label>
+                        <input id="admin-server-enabled" type="checkbox" checked>
+                        Serwer aktywny
+                    </label>
+                </div>
+
+                <div class="admin-server-form-actions">
+                    <button class="btn-confirm compact" type="submit">
+                        Zapisz serwer
+                    </button>
+
+                    <button class="btn-cancel compact" type="button" onclick="adminController.resetGameServerForm()">
+                        Wyczyść
+                    </button>
+                </div>
+            </form>
+
+            <div id="admin-game-servers" class="admin-game-servers">
+                <div class="empty-state">Ładowanie serwerów...</div>
+            </div>
+        </article>
         <article class="admin-card admin-card-wide">
             <div class="admin-card-header">
                 <div>
