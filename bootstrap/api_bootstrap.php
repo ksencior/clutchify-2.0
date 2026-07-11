@@ -169,6 +169,11 @@ function csrfProtectedActions(): array {
         'reset_ready_check',
         'start_match',
 
+        'submit_map_veto',
+        'auto_resolve_map_veto',
+        'reset_map_veto',
+        'set_match_veto_format',
+
         'test_practice_rcon',
         'start_practice',
         'practice_action',

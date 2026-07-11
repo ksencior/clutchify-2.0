@@ -23,6 +23,11 @@ function matchLobbyGetMatch(PDO $pdo, int $matchId): ?array {
             tm.tournament_id,
             tm.round_number,
             tm.match_number,
+            tm.match_format,
+            tm.veto_status,
+            tm.veto_started_at,
+            tm.veto_turn_started_at,
+            tm.veto_completed_at,
             tm.team_a_id,
             tm.team_b_id,
             tm.winner_team_id,
@@ -197,11 +202,621 @@ function matchLobbyTargetUserIds(PDO $pdo, array $match): array {
 
     return $targetIds;
 }
+function matchVetoTurnSeconds(): int {
+    return max(10, min(120, (int)env('MATCH_VETO_TURN_SECONDS', '30')));
+}
+
+function matchVetoFormats(): array {
+    return ['bo1', 'bo3', 'bo5'];
+}
+
+function matchVetoNormalizeFormat(?string $format): string {
+    return in_array($format, matchVetoFormats(), true) ? $format : 'bo1';
+}
+
+function matchVetoMapPool(): array {
+    $raw = env('MATCH_MAP_POOL', 'de_mirage,de_inferno,de_nuke,de_anubis,de_ancient,de_dust2,de_vertigo');
+
+    $maps = array_map('trim', explode(',', $raw));
+    $maps = array_filter($maps, fn($map) => preg_match('/^[a-z0-9_]{3,64}$/i', $map));
+
+    return array_values(array_unique($maps));
+}
+
+function matchVetoTeamSide(array $match, ?int $teamId): ?string {
+    if (!$teamId) return null;
+    if ((int)$match['team_a_id'] === $teamId) return 'a';
+    if ((int)$match['team_b_id'] === $teamId) return 'b';
+
+    return null;
+}
+
+function matchVetoTeamLabel(array $match, ?int $teamId): string {
+    $side = matchVetoTeamSide($match, $teamId);
+
+    if ($side === 'a') {
+        return ($match['team_a_tag'] ? '[' . $match['team_a_tag'] . '] ' : '') . ($match['team_a_name'] ?? 'Team 1');
+    }
+
+    if ($side === 'b') {
+        return ($match['team_b_tag'] ? '[' . $match['team_b_tag'] . '] ' : '') . ($match['team_b_name'] ?? 'Team 2');
+    }
+
+    return 'System';
+}
+
+function matchVetoState(PDO $pdo, array $match, int $viewerId, bool $isAdmin, ?int $viewerTeamId): array {
+    $status = $match['veto_status'] ?? 'not_started';
+    $format = matchVetoNormalizeFormat($match['match_format'] ?? 'bo1');
+    $pool = matchVetoMapPool();
+    $rows = matchVetoRows($pdo, (int)$match['id']);
+
+    foreach ($rows as &$row) {
+        $row['actor_side'] = matchVetoTeamSide($match, $row['actor_team_id']);
+        $row['actor_label'] = matchVetoTeamLabel($match, $row['actor_team_id']);
+
+        if ($row['action'] === 'decider') {
+            $row['actor_label'] = 'Decider';
+        }
+    }
+
+    if ($status === 'not_started') {
+        return [
+            'status' => 'not_started',
+            'format' => $format,
+            'map_pool' => $pool,
+            'actions' => $rows,
+            'available_maps' => $pool,
+            'current' => null,
+            'viewer_can_act' => false,
+            'completed' => false,
+            'turn' => null,
+            'final_maps' => []
+        ];
+    }
+
+    if ($status === 'completed') {
+        return [
+            'status' => 'completed',
+            'format' => $format,
+            'map_pool' => $pool,
+            'actions' => $rows,
+            'available_maps' => [],
+            'current' => null,
+            'viewer_can_act' => false,
+            'completed' => true,
+            'turn' => null,
+            'final_maps' => matchVetoFinalMaps($match, $rows)
+        ];
+    }
+
+    $current = matchVetoCurrentFromPlan($match, $rows);
+
+    $usedMaps = matchVetoUsedMaps($rows);
+    $availableMaps = array_values(array_diff($pool, $usedMaps));
+
+    $viewerCanAct = false;
+
+    if ($current && !empty($current['actor_team_id'])) {
+        $viewerCanAct = matchVetoUserCanAct(
+            $pdo,
+            $match,
+            $viewerId,
+            $isAdmin,
+            $viewerTeamId,
+            (int)$current['actor_team_id']
+        );
+    }
+
+    return [
+        'status' => 'active',
+        'format' => $format,
+        'map_pool' => $pool,
+        'actions' => $rows,
+        'available_maps' => $availableMaps,
+        'current' => $current ? [
+            'step_number' => (int)$current['step_number'],
+            'action' => $current['action'],
+            'actor_team_id' => $current['actor_team_id'],
+            'actor_side' => matchVetoTeamSide($match, $current['actor_team_id']),
+            'actor_label' => matchVetoTeamLabel($match, $current['actor_team_id']),
+            'map_name' => $current['map_name'] ?? null,
+            'picked_by_team_id' => $current['picked_by_team_id'] ?? null
+        ] : null,
+        'viewer_can_act' => $viewerCanAct,
+        'completed' => false,
+        'turn' => matchVetoTurnMeta($match),
+        'final_maps' => []
+    ];
+}
+
+function matchVetoRows(PDO $pdo, int $matchId): array {
+    $stmt = $pdo->prepare("
+        SELECT *
+        FROM match_map_veto
+        WHERE match_id = ?
+        ORDER BY step_number ASC
+    ");
+    $stmt->execute([$matchId]);
+
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($rows as &$row) {
+        $row['id'] = (int)$row['id'];
+        $row['match_id'] = (int)$row['match_id'];
+        $row['step_number'] = (int)$row['step_number'];
+        $row['actor_team_id'] = $row['actor_team_id'] !== null ? (int)$row['actor_team_id'] : null;
+        $row['created_by'] = $row['created_by'] !== null ? (int)$row['created_by'] : null;
+        $row['is_auto'] = (bool)($row['is_auto'] ?? false);
+    }
+
+    return $rows;
+}
+
+function matchVetoPlan(array $match): array {
+    $format = matchVetoNormalizeFormat($match['match_format'] ?? 'bo1');
+    $teamA = (int)$match['team_a_id'];
+    $teamB = (int)$match['team_b_id'];
+
+    $step = 1;
+    $plan = [];
+
+    $add = function (string $action, ?int $actorTeamId) use (&$plan, &$step) {
+        $plan[] = [
+            'step_number' => $step++,
+            'action' => $action,
+            'actor_team_id' => $actorTeamId
+        ];
+    };
+
+    if ($format === 'bo1') {
+        $banCount = max(0, count(matchVetoMapPool()) - 1);
+
+        for ($i = 0; $i < $banCount; $i++) {
+            $add('ban', $i % 2 === 0 ? $teamA : $teamB);
+        }
+
+        $add('decider', null);
+        return $plan;
+    }
+
+    if ($format === 'bo3') {
+        $add('ban', $teamA);
+        $add('ban', $teamB);
+
+        $add('pick', $teamA);
+        $add('side', $teamB);
+
+        $add('pick', $teamB);
+        $add('side', $teamA);
+
+        $add('ban', $teamA);
+        $add('ban', $teamB);
+
+        $add('decider', null);
+
+        return $plan;
+    }
+
+    /**
+     * BO5:
+     * T1 Ban, T2 Ban,
+     * T1 Pick/T2 Side,
+     * T2 Pick/T1 Side,
+     * T1 Pick/T2 Side,
+     * T2 Pick/T1 Side,
+     * Decider.
+     */
+    $add('ban', $teamA);
+    $add('ban', $teamB);
+
+    $add('pick', $teamA);
+    $add('side', $teamB);
+
+    $add('pick', $teamB);
+    $add('side', $teamA);
+
+    $add('pick', $teamA);
+    $add('side', $teamB);
+
+    $add('pick', $teamB);
+    $add('side', $teamA);
+
+    $add('decider', null);
+
+    return $plan;
+}
+
+function matchVetoUsedMaps(array $rows): array {
+    $used = [];
+
+    foreach ($rows as $row) {
+        if (in_array($row['action'], ['ban', 'pick', 'decider'], true)) {
+            $used[] = $row['map_name'];
+        }
+    }
+
+    return array_values(array_unique($used));
+}
+
+function matchVetoLastPickBeforeStep(array $rows, int $stepNumber): ?array {
+    $lastPick = null;
+
+    foreach ($rows as $row) {
+        if ((int)$row['step_number'] >= $stepNumber) {
+            continue;
+        }
+
+        if ($row['action'] === 'pick') {
+            $lastPick = $row;
+        }
+    }
+
+    return $lastPick;
+}
+
+function matchVetoCurrentFromPlan(array $match, array $rows): ?array {
+    $plan = matchVetoPlan($match);
+
+    $rowsByStep = [];
+
+    foreach ($rows as $row) {
+        $rowsByStep[(int)$row['step_number']] = $row;
+    }
+
+    foreach ($plan as $planned) {
+        $step = (int)$planned['step_number'];
+
+        if (isset($rowsByStep[$step])) {
+            continue;
+        }
+
+        if ($planned['action'] === 'side') {
+            $lastPick = matchVetoLastPickBeforeStep($rows, $step);
+
+            if ($lastPick) {
+                $planned['map_name'] = $lastPick['map_name'];
+                $planned['picked_by_team_id'] = $lastPick['actor_team_id'];
+            }
+        }
+
+        return $planned;
+    }
+
+    return null;
+}
+
+function matchVetoTurnMeta(array $match): array {
+    $turnSeconds = matchVetoTurnSeconds();
+    $startedAt = $match['veto_turn_started_at'] ?? null;
+
+    if (!$startedAt) {
+        return [
+            'turn_seconds' => $turnSeconds,
+            'started_at' => null,
+            'deadline_at' => null,
+            'remaining_seconds' => $turnSeconds,
+            'timed_out' => false
+        ];
+    }
+
+    $startedTs = strtotime($startedAt);
+    $deadlineTs = $startedTs + $turnSeconds;
+    $remaining = max(0, $deadlineTs - time());
+
+    return [
+        'turn_seconds' => $turnSeconds,
+        'started_at' => $startedAt,
+        'deadline_at' => date('Y-m-d H:i:s', $deadlineTs),
+        'remaining_seconds' => $remaining,
+        'timed_out' => $remaining <= 0
+    ];
+}
+
+function matchVetoFinalMaps(array $match, array $rows): array {
+    $final = [];
+
+    foreach ($rows as $row) {
+        if (!in_array($row['action'], ['pick', 'decider'], true)) {
+            continue;
+        }
+
+        $sideRow = null;
+
+        if ($row['action'] === 'pick') {
+            foreach ($rows as $candidate) {
+                if (
+                    $candidate['action'] === 'side'
+                    && (int)$candidate['step_number'] > (int)$row['step_number']
+                    && $candidate['map_name'] === $row['map_name']
+                ) {
+                    $sideRow = $candidate;
+                    break;
+                }
+            }
+        }
+
+        $final[] = [
+            'map_name' => $row['map_name'],
+            'source' => $row['action'],
+            'picked_by_team_id' => $row['actor_team_id'],
+            'picked_by_label' => $row['action'] === 'pick'
+                ? matchVetoTeamLabel($match, $row['actor_team_id'])
+                : 'Decider',
+            'side_team_id' => $sideRow['actor_team_id'] ?? null,
+            'side_team_label' => $sideRow
+                ? matchVetoTeamLabel($match, $sideRow['actor_team_id'])
+                : null,
+            'side_choice' => $sideRow['side_choice'] ?? null
+        ];
+    }
+
+    return $final;
+}
+
+function matchVetoUserCanAct(PDO $pdo, array $match, int $userId, bool $isAdmin, ?int $viewerTeamId, int $actorTeamId): bool {
+    if ($isAdmin) {
+        return true;
+    }
+
+    if (!$viewerTeamId || $viewerTeamId !== $actorTeamId) {
+        return false;
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT captain_id
+        FROM teams
+        WHERE id = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$actorTeamId]);
+
+    return (int)$stmt->fetchColumn() === $userId;
+}
+
+function matchVetoStartIfReady(PDO $pdo, array $match, array $readySummary): bool {
+    if (!$readySummary['all_ready']) {
+        return false;
+    }
+
+    if (($match['veto_status'] ?? 'not_started') !== 'not_started') {
+        return false;
+    }
+
+    if (!$match['team_a_id'] || !$match['team_b_id']) {
+        return false;
+    }
+
+    $stmt = $pdo->prepare("
+        UPDATE tournament_matches
+        SET veto_status = 'active',
+            veto_started_at = NOW(),
+            veto_turn_started_at = NOW(),
+            status = IF(status = 'pending', 'ready_check', status)
+        WHERE id = ?
+          AND veto_status = 'not_started'
+    ");
+    $stmt->execute([(int)$match['id']]);
+
+    return $stmt->rowCount() > 0;
+}
+
+function matchVetoCompleteIfDecider(PDO $pdo, array $match): bool {
+    $rows = matchVetoRows($pdo, (int)$match['id']);
+    $current = matchVetoCurrentFromPlan($match, $rows);
+
+    if (!$current || $current['action'] !== 'decider') {
+        return false;
+    }
+
+    $pool = matchVetoMapPool();
+    $used = matchVetoUsedMaps($rows);
+    $available = array_values(array_diff($pool, $used));
+
+    if (count($available) !== 1) {
+        return false;
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO match_map_veto (
+                match_id,
+                step_number,
+                action,
+                actor_team_id,
+                map_name,
+                side_choice,
+                is_auto,
+                created_by
+            )
+            VALUES (?, ?, 'decider', NULL, ?, NULL, 1, NULL)
+        ");
+        $stmt->execute([
+            (int)$match['id'],
+            (int)$current['step_number'],
+            $available[0]
+        ]);
+    } catch (Throwable $e) {
+        /**
+         * Możliwe, że inny request już dodał decider.
+         */
+    }
+
+    $stmt = $pdo->prepare("
+        UPDATE tournament_matches
+        SET veto_status = 'completed',
+            veto_completed_at = NOW(),
+            veto_turn_started_at = NULL
+        WHERE id = ?
+          AND veto_status = 'active'
+    ");
+    $stmt->execute([(int)$match['id']]);
+
+    return true;
+}
+
+function matchVetoAutoStartMatchIfCompleted(PDO $pdo, array $match): bool {
+    $fresh = matchLobbyGetMatch($pdo, (int)$match['id']);
+
+    if (!$fresh || ($fresh['veto_status'] ?? '') !== 'completed') {
+        return false;
+    }
+
+    if (($fresh['status'] ?? '') === 'live') {
+        return false;
+    }
+
+    /**
+     * Na tym etapie tylko zmieniamy status.
+     * Następny krok: tutaj podepniemy przydział serwera CS i MatchZy config.
+     */
+    $stmt = $pdo->prepare("
+        UPDATE tournament_matches
+        SET status = 'live',
+            started_at = COALESCE(started_at, NOW())
+        WHERE id = ?
+          AND status != 'live'
+    ");
+    $stmt->execute([(int)$fresh['id']]);
+
+    return $stmt->rowCount() > 0;
+}
+
+function matchVetoAfterAction(PDO $pdo, int $matchId): array {
+    $match = matchLobbyGetMatch($pdo, $matchId);
+
+    if (!$match) {
+        return [
+            'completed' => false,
+            'match_started' => false
+        ];
+    }
+
+    $completedNow = matchVetoCompleteIfDecider($pdo, $match);
+
+    $fresh = matchLobbyGetMatch($pdo, $matchId);
+
+    if (!$fresh) {
+        return [
+            'completed' => $completedNow,
+            'match_started' => false
+        ];
+    }
+
+    if (($fresh['veto_status'] ?? '') === 'completed') {
+        $started = matchVetoAutoStartMatchIfCompleted($pdo, $fresh);
+
+        return [
+            'completed' => true,
+            'match_started' => $started
+        ];
+    }
+
+    /**
+     * Następny ruch zaczyna licznik od nowa.
+     */
+    $stmt = $pdo->prepare("
+        UPDATE tournament_matches
+        SET veto_turn_started_at = NOW()
+        WHERE id = ?
+          AND veto_status = 'active'
+    ");
+    $stmt->execute([$matchId]);
+
+    return [
+        'completed' => false,
+        'match_started' => false
+    ];
+}
+function matchVetoAutoResolve(PDO $pdo, array $match): array {
+    $state = matchVetoState($pdo, $match, 0, true, null);
+    $current = $state['current'];
+
+    if (!$current || ($match['veto_status'] ?? '') !== 'active') {
+        return [
+            'resolved' => false,
+            'message' => 'Brak aktywnego ruchu veto.'
+        ];
+    }
+
+    if (empty($state['turn']['timed_out'])) {
+        return [
+            'resolved' => false,
+            'message' => 'Czas jeszcze nie minął.'
+        ];
+    }
+
+    $vetoAction = $current['action'];
+    $actorTeamId = (int)$current['actor_team_id'];
+    $mapName = '';
+    $sideChoice = null;
+
+    if (in_array($vetoAction, ['ban', 'pick'], true)) {
+        $available = $state['available_maps'] ?? [];
+
+        if (!$available) {
+            return [
+                'resolved' => false,
+                'message' => 'Brak dostępnych map.'
+            ];
+        }
+
+        $mapName = $available[array_rand($available)];
+    } elseif ($vetoAction === 'side') {
+        $mapName = (string)($current['map_name'] ?? '');
+        $sideChoice = random_int(0, 1) === 1 ? 'ct' : 't';
+    } else {
+        return [
+            'resolved' => false,
+            'message' => 'Nieprawidłowa akcja auto veto.'
+        ];
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO match_map_veto (
+                match_id,
+                step_number,
+                action,
+                actor_team_id,
+                map_name,
+                side_choice,
+                is_auto,
+                created_by
+            )
+            VALUES (?, ?, ?, ?, ?, ?, 1, NULL)
+        ");
+
+        $stmt->execute([
+            (int)$match['id'],
+            (int)$current['step_number'],
+            $vetoAction,
+            $actorTeamId,
+            $mapName,
+            $sideChoice
+        ]);
+    } catch (Throwable $e) {
+        return [
+            'resolved' => false,
+            'message' => 'Ten ruch został już rozwiązany.'
+        ];
+    }
+
+    $after = matchVetoAfterAction($pdo, (int)$match['id']);
+
+    return [
+        'resolved' => true,
+        'message' => 'System wykonał automatyczny ruch veto.',
+        'veto_completed' => $after['completed'],
+        'match_started' => $after['match_started']
+    ];
+}
 
 function matchLobbyBuildResponse(PDO $pdo, array $match, int $viewerId, bool $isAdmin, ?int $viewerTeamId): array {
     $teamAPlayers = matchLobbyTeamPlayers($pdo, $match['team_a_id'], (int)$match['id']);
     $teamBPlayers = matchLobbyTeamPlayers($pdo, $match['team_b_id'], (int)$match['id']);
     $readySummary = matchLobbyReadySummary($teamAPlayers, $teamBPlayers);
+    $vetoState = matchVetoState($pdo, $match, $viewerId, $isAdmin, $viewerTeamId);
 
     $viewerReady = false;
 
@@ -237,6 +852,7 @@ function matchLobbyBuildResponse(PDO $pdo, array $match, int $viewerId, bool $is
             ]
         ],
         'ready_summary' => $readySummary,
+        'veto' => $vetoState,
         'viewer' => [
             'id' => $viewerId,
             'team_id' => $viewerTeamId,
@@ -381,6 +997,8 @@ if ($action === 'set_player_ready') {
     $teamAPlayers = matchLobbyTeamPlayers($pdo, $match['team_a_id'], $matchId);
     $teamBPlayers = matchLobbyTeamPlayers($pdo, $match['team_b_id'], $matchId);
     $readySummary = matchLobbyReadySummary($teamAPlayers, $teamBPlayers);
+    $vetoStarted = matchVetoStartIfReady($pdo, $match, $readySummary);
+    $freshMatch = matchLobbyGetMatch($pdo, (int)$match['id']);
 
     $newStatus = $readySummary['total_ready'] > 0 ? 'ready_check' : 'pending';
 
@@ -397,7 +1015,8 @@ if ($action === 'set_player_ready') {
     jsonSuccess([
         'message' => $isReady ? 'Oznaczono gotowość.' : 'Cofnięto gotowość.',
         'ready_summary' => $readySummary,
-        'target_ids' => $freshMatch ? matchLobbyTargetUserIds($pdo, $freshMatch) : []
+        'veto_started' => $vetoStarted,
+        'target_ids' => $freshMatch ? matchLobbyTargetUserIds($pdo, $freshMatch) : [],
     ]);
 }
 
@@ -473,6 +1092,12 @@ if ($action === 'start_match') {
         jsonError('Nie wszyscy wymagani gracze są gotowi.');
     }
 
+    $vetoState = matchVetoState($pdo, $match, $userId, true, null);
+
+    if (!$vetoState['completed']) {
+        jsonError('Najpierw zakończ veto map.');
+    }
+
     $stmt = $pdo->prepare("
         UPDATE tournament_matches
         SET status = 'live', started_at = COALESCE(started_at, NOW())
@@ -502,5 +1127,220 @@ if ($action === 'start_match') {
     jsonSuccess([
         'message' => 'Mecz został wystartowany.',
         'target_ids' => matchLobbyTargetUserIds($pdo, $match)
+    ]);
+}
+if ($action === 'submit_map_veto') {
+    $userId = requireUserId();
+    $input = getJsonInput();
+
+    $matchId = (int)($input['match_id'] ?? 0);
+    $vetoAction = (string)($input['veto_action'] ?? '');
+    $mapName = trim((string)($input['map_name'] ?? ''));
+    $sideChoice = strtolower(trim((string)($input['side_choice'] ?? '')));
+
+    if (!$matchId) {
+        jsonError('Brak ID meczu.');
+    }
+
+    $match = matchLobbyGetMatch($pdo, $matchId);
+
+    if (!$match) {
+        jsonError('Mecz nie istnieje.', 404);
+    }
+
+    if (($match['veto_status'] ?? 'not_started') !== 'active') {
+        jsonError('Veto nie jest aktualnie aktywne.');
+    }
+
+    $isAdmin = matchLobbyIsAdmin($pdo, $userId);
+    $viewerTeamId = matchLobbyGetUserTeamId($pdo, $userId);
+
+    if (!matchLobbyCanView($match, $isAdmin, $viewerTeamId)) {
+        jsonError('Nie masz dostępu do tego lobby.', 403);
+    }
+
+    $state = matchVetoState($pdo, $match, $userId, $isAdmin, $viewerTeamId);
+    $current = $state['current'];
+
+    if (!$current) {
+        jsonError('Brak aktywnego ruchu veto.');
+    }
+
+    /**
+     * Gdy gracz kliknie po czasie, nie przyjmujemy spóźnionej akcji.
+     */
+    if (!empty($state['turn']['timed_out'])) {
+        jsonError('Czas na ten ruch minął. System zaraz wybierze automatycznie.');
+    }
+
+    if ($vetoAction !== $current['action']) {
+        jsonError('To nie jest aktualna akcja veto.');
+    }
+
+    $actorTeamId = (int)$current['actor_team_id'];
+
+    if (!matchVetoUserCanAct($pdo, $match, $userId, $isAdmin, $viewerTeamId, $actorTeamId)) {
+        jsonError('Teraz ruch ma ' . $current['actor_label'] . '.', 403);
+    }
+
+    if (in_array($vetoAction, ['ban', 'pick'], true)) {
+        if (!in_array($mapName, $state['available_maps'], true)) {
+            jsonError('Ta mapa nie jest dostępna.');
+        }
+
+        $sideChoice = null;
+    } elseif ($vetoAction === 'side') {
+        if (!in_array($sideChoice, ['ct', 't'], true)) {
+            jsonError('Wybierz stronę CT albo T.');
+        }
+
+        $mapName = (string)($current['map_name'] ?? '');
+
+        if ($mapName === '') {
+            jsonError('Nie udało się ustalić mapy dla wyboru strony.');
+        }
+    } else {
+        jsonError('Nieprawidłowa akcja veto.');
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO match_map_veto (
+                match_id,
+                step_number,
+                action,
+                actor_team_id,
+                map_name,
+                side_choice,
+                is_auto,
+                created_by
+            )
+            VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+        ");
+
+        $stmt->execute([
+            $matchId,
+            (int)$current['step_number'],
+            $vetoAction,
+            $actorTeamId,
+            $mapName,
+            $sideChoice,
+            $userId
+        ]);
+    } catch (Throwable $e) {
+        jsonError('Nie udało się zapisać akcji veto. Odśwież lobby.');
+    }
+
+    $after = matchVetoAfterAction($pdo, $matchId);
+    $freshMatch = matchLobbyGetMatch($pdo, $matchId);
+
+    jsonSuccess([
+        'message' => match ($vetoAction) {
+            'ban' => 'Mapa została zbanowana.',
+            'pick' => 'Mapa została wybrana.',
+            'side' => 'Strona została wybrana.',
+            default => 'Akcja veto zapisana.'
+        },
+        'veto_completed' => $after['completed'],
+        'match_started' => $after['match_started'],
+        'target_ids' => $freshMatch ? matchLobbyTargetUserIds($pdo, $freshMatch) : []
+    ]);
+}
+if ($action === 'reset_map_veto') {
+    $userId = requireAdminUserId($pdo);
+    $input = getJsonInput();
+
+    $matchId = (int)($input['match_id'] ?? 0);
+
+    if (!$matchId) {
+        jsonError('Brak ID meczu.');
+    }
+
+    $match = matchLobbyGetMatch($pdo, $matchId);
+
+    if (!$match) {
+        jsonError('Mecz nie istnieje.', 404);
+    }
+
+    if (!in_array($match['status'], ['pending', 'ready_check'], true)) {
+        jsonError('Veto można zresetować tylko przed startem meczu.');
+    }
+
+    $stmt = $pdo->prepare("DELETE FROM match_map_veto WHERE match_id = ?");
+    $stmt->execute([$matchId]);
+
+    jsonSuccess([
+        'message' => 'Veto map zostało zresetowane.',
+        'target_ids' => matchLobbyTargetUserIds($pdo, $match)
+    ]);
+}
+if ($action === 'set_match_veto_format') {
+    $userId = requireAdminUserId($pdo);
+    $input = getJsonInput();
+
+    $matchId = (int)($input['match_id'] ?? 0);
+    $format = matchVetoNormalizeFormat((string)($input['format'] ?? 'bo1'));
+
+    if (!$matchId) {
+        jsonError('Brak ID meczu.');
+    }
+
+    $match = matchLobbyGetMatch($pdo, $matchId);
+
+    if (!$match) {
+        jsonError('Mecz nie istnieje.', 404);
+    }
+
+    if (!in_array($match['status'], ['pending', 'ready_check'], true)) {
+        jsonError('Format można zmienić tylko przed startem meczu.');
+    }
+
+    $pdo->beginTransaction();
+
+    try {
+        $stmt = $pdo->prepare("UPDATE tournament_matches SET match_format = ? WHERE id = ?");
+        $stmt->execute([$format, $matchId]);
+
+        $stmt = $pdo->prepare("DELETE FROM match_map_veto WHERE match_id = ?");
+        $stmt->execute([$matchId]);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        jsonError('Nie udało się zmienić formatu veto.');
+    }
+
+    $freshMatch = matchLobbyGetMatch($pdo, $matchId);
+
+    jsonSuccess([
+        'message' => 'Format meczu został zmieniony. Veto zostało zresetowane.',
+        'target_ids' => $freshMatch ? matchLobbyTargetUserIds($pdo, $freshMatch) : []
+    ]);
+}
+if ($action === 'auto_resolve_map_veto') {
+    requireUserId();
+
+    $input = getJsonInput();
+    $matchId = (int)($input['match_id'] ?? 0);
+
+    if (!$matchId) {
+        jsonError('Brak ID meczu.');
+    }
+
+    $match = matchLobbyGetMatch($pdo, $matchId);
+
+    if (!$match) {
+        jsonError('Mecz nie istnieje.', 404);
+    }
+
+    $result = matchVetoAutoResolve($pdo, $match);
+    $freshMatch = matchLobbyGetMatch($pdo, $matchId);
+
+    jsonSuccess([
+        'message' => $result['message'],
+        'resolved' => $result['resolved'],
+        'veto_completed' => $result['veto_completed'] ?? false,
+        'match_started' => $result['match_started'] ?? false,
+        'target_ids' => $freshMatch ? matchLobbyTargetUserIds($pdo, $freshMatch) : []
     ]);
 }

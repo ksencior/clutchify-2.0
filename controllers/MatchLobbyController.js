@@ -3,6 +3,8 @@ import { AppState } from '../state.js';
 export const matchLobbyController = {
     currentId: null,
     lastData: null,
+    vetoTimer: null,
+    vetoAutoResolveInFlight: false,
 
     init: async () => {
         window.matchLobbyController = matchLobbyController;
@@ -61,6 +63,7 @@ export const matchLobbyController = {
         }
 
         matchLobbyController.renderReadyBar(ready);
+        matchLobbyController.renderVeto(data);
         matchLobbyController.renderTeam('a', teams.a, ready.team_a || {});
         matchLobbyController.renderTeam('b', teams.b, ready.team_b || {});
         matchLobbyController.renderPlayerControls(data);
@@ -101,6 +104,344 @@ export const matchLobbyController = {
                 `}
             </div>
         `;
+    },
+    clearVetoTimer: () => {
+        if (matchLobbyController.vetoTimer) {
+            clearInterval(matchLobbyController.vetoTimer);
+            matchLobbyController.vetoTimer = null;
+        }
+    },
+
+    startVetoTimer: (veto) => {
+        matchLobbyController.clearVetoTimer();
+
+        if (!veto?.turn || veto.status !== 'active' || !veto.current) {
+            return;
+        }
+
+        const tick = () => {
+            const timerEl = document.getElementById('match-veto-timer');
+            if (!timerEl) return;
+
+            const deadline = veto.turn.deadline_at
+                ? new Date(veto.turn.deadline_at.replace(' ', 'T')).getTime()
+                : null;
+
+            if (!deadline) {
+                timerEl.textContent = `${Number(veto.turn.remaining_seconds || 0)}s`;
+                return;
+            }
+
+            const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+            timerEl.textContent = `${remaining}s`;
+
+            if (remaining <= 0) {
+                matchLobbyController.clearVetoTimer();
+                matchLobbyController.autoResolveVeto();
+            }
+        };
+
+        tick();
+        matchLobbyController.vetoTimer = setInterval(tick, 300);
+    },
+
+    autoResolveVeto: async () => {
+        if (matchLobbyController.vetoAutoResolveInFlight) {
+            return;
+        }
+
+        matchLobbyController.vetoAutoResolveInFlight = true;
+
+        try {
+            const response = await window.apiFetch('api.php?action=auto_resolve_map_veto', {
+                method: 'POST',
+                body: JSON.stringify({
+                    match_id: matchLobbyController.currentId
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.resolved) {
+                window.Toast.show(data.message || 'System wykonał automatyczne veto.', 'info');
+                matchLobbyController.notifyLobbyUpdate(data.target_ids || []);
+            }
+
+            await matchLobbyController.load();
+        } catch (error) {
+            console.error(error);
+        } finally {
+            matchLobbyController.vetoAutoResolveInFlight = false;
+        }
+    },
+    renderVeto: (data) => {
+        const veto = data.veto || {};
+        const current = veto.current || null;
+
+        const status = document.getElementById('match-veto-status');
+        const currentBox = document.getElementById('match-veto-current');
+        const mapsBox = document.getElementById('match-veto-maps');
+        const historyBox = document.getElementById('match-veto-history');
+
+        matchLobbyController.setText('match-veto-format', String(veto.format || 'bo1').toUpperCase());
+
+        if (!status || !currentBox || !mapsBox || !historyBox) return;
+
+        matchLobbyController.clearVetoTimer();
+
+        if (veto.status === 'not_started') {
+            status.textContent = 'Veto wystartuje automatycznie, gdy wszyscy wymagani gracze dadzą READY.';
+
+            currentBox.innerHTML = `
+                <div class="match-lobby-callout">
+                    <strong>Oczekiwanie na ready</strong>
+                    <span>Najpierw gracze muszą potwierdzić gotowość.</span>
+                </div>
+            `;
+
+            mapsBox.innerHTML = '';
+            historyBox.innerHTML = matchLobbyController.renderVetoHistory(data);
+            return;
+        }
+
+        if (veto.completed) {
+            status.textContent = data.match?.status === 'live'
+                ? 'Veto zakończone. Mecz wystartował.'
+                : 'Veto zakończone. Mecz zaraz wystartuje.';
+
+            currentBox.innerHTML = `
+                <div class="match-lobby-callout is-live">
+                    <strong>Mapy meczu</strong>
+                    <span>${matchLobbyController.renderFinalMapsText(veto.final_maps || [])}</span>
+                </div>
+            `;
+
+            mapsBox.innerHTML = '';
+            historyBox.innerHTML = matchLobbyController.renderVetoHistory(data);
+            return;
+        }
+
+        if (!current) {
+            status.textContent = 'Veto aktywne.';
+            currentBox.innerHTML = '';
+            mapsBox.innerHTML = '';
+            historyBox.innerHTML = matchLobbyController.renderVetoHistory(data);
+            return;
+        }
+
+        const actionLabel = matchLobbyController.vetoActionLabel(current.action);
+
+        status.textContent = `Ruch: ${current.actor_label} — ${actionLabel}.`;
+
+        currentBox.innerHTML = `
+            <div class="match-veto-turn">
+                <div>
+                    <strong>${window.escapeHTML(current.actor_label)}</strong>
+                    <span>${current.action === 'side'
+                        ? `wybiera stronę na ${window.escapeHTML(matchLobbyController.cleanMapName(current.map_name || '-'))}`
+                        : actionLabel}
+                    </span>
+                </div>
+
+                <div class="match-veto-clock">
+                    <b id="match-veto-timer">${Number(veto.turn?.remaining_seconds || 0)}s</b>
+                    <small>na decyzję</small>
+                </div>
+            </div>
+        `;
+
+        if (current.action === 'side') {
+            mapsBox.innerHTML = veto.viewer_can_act ? `
+                <button class="match-veto-map is-side" onclick="matchLobbyController.submitVeto('side', null, 'ct')" style="--map-image: url('public/img/maps/${window.escapeHTML(current.map_name)}.jpg')">
+                    <strong>CT</strong>
+                    <span>Wybierz stronę</span>
+                </button>
+
+                <button class="match-veto-map is-side" onclick="matchLobbyController.submitVeto('side', null, 't')" style="--map-image: url('public/img/maps/${window.escapeHTML(current.map_name)}.jpg')">
+                    <strong>T</strong>
+                    <span>Wybierz stronę</span>
+                </button>
+            ` : `
+                <div class="match-lobby-callout">
+                    <strong>Oczekiwanie</strong>
+                    <span>Teraz decyzję podejmuje ${window.escapeHTML(current.actor_label)}.</span>
+                </div>
+            `;
+        } else {
+            mapsBox.innerHTML = (veto.available_maps || []).map(map => `
+                <button
+                    class="match-veto-map ${current.action === 'ban' ? 'is-ban' : 'is-pick'}"
+                    ${veto.viewer_can_act ? '' : 'disabled'}
+                    onclick="matchLobbyController.submitVeto('${current.action}', '${window.escapeHTML(map)}')"
+                    style="--map-image: url('public/img/maps/${window.escapeHTML(map)}.jpg')"
+                >
+                    <strong>${window.escapeHTML(matchLobbyController.cleanMapName(map))}</strong>
+                    <span>${current.action === 'ban' ? 'Ban' : 'Pick'}</span>
+                </button>
+            `).join('');
+        }
+
+        historyBox.innerHTML = matchLobbyController.renderVetoHistory(data);
+        matchLobbyController.startVetoTimer(veto);
+    },
+
+    renderVetoHistory: (data) => {
+        const veto = data.veto || {};
+        const actions = veto.actions || [];
+
+        if (!actions.length) {
+            return '<div class="empty-state">Jeszcze nie wykonano żadnej akcji veto.</div>';
+        }
+
+        return `
+            <div class="match-veto-timeline">
+                ${actions.map(action => `
+                    <div class="match-veto-step action-${window.escapeHTML(action.action)}">
+                        <span>#${Number(action.step_number)}</span>
+
+                        <div>
+                            <strong>${window.escapeHTML(matchLobbyController.vetoHistoryLabel(action))}</strong>
+                            <small>${window.escapeHTML(action.actor_label || 'System')}</small>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    },
+
+    vetoHistoryLabel: (action) => {
+        const map = matchLobbyController.cleanMapName(action.map_name || '');
+
+        if (action.action === 'ban') {
+            return `Ban: ${map}`;
+        }
+
+        if (action.action === 'pick') {
+            return `Pick: ${map}`;
+        }
+
+        if (action.action === 'side') {
+            return `Strona: ${(action.side_choice || '').toUpperCase()} na ${map}`;
+        }
+
+        if (action.action === 'decider') {
+            return `Decider: ${map}`;
+        }
+
+        return map;
+    },
+
+    renderFinalMapsText: (maps = []) => {
+        if (!maps.length) {
+            return 'Brak map.';
+        }
+
+        return maps.map(item => {
+            const map = matchLobbyController.cleanMapName(item.map_name);
+
+            if (item.source === 'decider') {
+                return `${map} jako decider`;
+            }
+
+            const side = item.side_choice
+                ? `, ${item.side_team_label} wybiera ${(item.side_choice || '').toUpperCase()}`
+                : '';
+
+            return `${map} — pick ${item.picked_by_label}${side}`;
+        }).join(' • ');
+    },
+
+    vetoActionLabel: (action) => {
+        const labels = {
+            ban: 'banuje mapę',
+            pick: 'wybiera mapę',
+            side: 'wybiera stronę',
+            decider: 'decider'
+        };
+
+        return labels[action] || action;
+    },
+
+    cleanMapName: (map) => {
+        return String(map || '')
+            .replace(/^de_/, '')
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, char => char.toUpperCase());
+    },
+
+    submitVeto: async (action, mapName = null, sideChoice = null) => {
+        const response = await window.apiFetch('api.php?action=submit_map_veto', {
+            method: 'POST',
+            body: JSON.stringify({
+                match_id: matchLobbyController.currentId,
+                veto_action: action,
+                map_name: mapName,
+                side_choice: sideChoice
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            window.Toast.show(data.message || 'Nie udało się zapisać veto.', 'error');
+            return;
+        }
+
+        window.Toast.show(data.message || 'Veto zapisane.', 'success');
+
+        matchLobbyController.notifyLobbyUpdate(data.target_ids || []);
+        await matchLobbyController.load();
+    },
+
+    resetVeto: () => {
+        window.Popout.create(
+            'Zresetować veto?',
+            'Wszystkie bany, picki i wybory stron dla tego meczu zostaną usunięte.',
+            null,
+            async () => {
+                const response = await window.apiFetch('api.php?action=reset_map_veto', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        match_id: matchLobbyController.currentId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    window.Toast.show(data.message || 'Nie udało się zresetować veto.', 'error');
+                    return;
+                }
+
+                window.Toast.show(data.message || 'Veto zresetowane.', 'success');
+                matchLobbyController.notifyLobbyUpdate(data.target_ids || []);
+                await matchLobbyController.load();
+            },
+            'confirm'
+        );
+    },
+
+    setVetoFormat: async () => {
+        const format = document.getElementById('match-veto-format-select')?.value || 'bo1';
+
+        const response = await window.apiFetch('api.php?action=set_match_veto_format', {
+            method: 'POST',
+            body: JSON.stringify({
+                match_id: matchLobbyController.currentId,
+                format
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            window.Toast.show(data.message || 'Nie udało się zmienić formatu.', 'error');
+            return;
+        }
+
+        window.Toast.show(data.message || 'Format zmieniony.', 'success');
+        matchLobbyController.notifyLobbyUpdate(data.target_ids || []);
+        await matchLobbyController.load();
     },
 
     renderPlayer: (player) => {

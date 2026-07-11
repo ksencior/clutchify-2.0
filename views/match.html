@@ -11,6 +11,21 @@
             <button class="btn-ok compact" onclick="matchLobbyController.openTournament()">Turniej</button>
         </div>
     </section>
+    <section class="match-veto-card">
+        <div class="match-veto-head">
+            <div>
+                <span class="eyebrow">Map veto</span>
+                <h2>Banowanie map</h2>
+                <p id="match-veto-status">Veto wystartuje po ready checku.</p>
+            </div>
+
+            <strong id="match-veto-format">BO1</strong>
+        </div>
+
+        <div id="match-veto-current"></div>
+        <div id="match-veto-maps" class="match-veto-maps"></div>
+        <div id="match-veto-history" class="match-veto-history"></div>
+    </section>
 
     <section class="match-ready-card">
         <div class="match-ready-head">

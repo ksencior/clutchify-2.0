@@ -3845,6 +3845,306 @@ html.auth-mode .sidebar {
     justify-content: center;
 }
 
+/* --- MATCH MAP VETO --- */
+.match-veto-card {
+    background:
+        radial-gradient(circle at top right, rgba(255,0,43,0.13), transparent 32%),
+        var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    padding: 22px;
+    margin-bottom: 20px;
+}
+
+.match-veto-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 18px;
+    margin-bottom: 16px;
+}
+
+.match-veto-head h2 {
+    font-size: 24px;
+    margin: 4px 0 6px;
+}
+
+.match-veto-head p {
+    color: var(--text-gray);
+    font-size: 13px;
+}
+
+#match-veto-format {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    padding: 8px 12px;
+    background: rgba(255,0,43,0.12);
+    color: var(--brand-red);
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: .8px;
+}
+
+.match-veto-admin {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.match-veto-admin select {
+    background: #080808;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    color: var(--text-white);
+    padding: 10px 12px;
+}
+
+.match-veto-turn {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    background: rgba(255,255,255,0.045);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 13px 14px;
+    margin-bottom: 14px;
+}
+
+.match-veto-turn strong {
+    color: var(--text-white);
+}
+
+.match-veto-turn span {
+    color: var(--text-gray);
+    font-size: 13px;
+}
+
+.match-veto-side-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.match-veto-maps {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.match-veto-map {
+    min-height: 74px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.075);
+    border-radius: 14px;
+    color: var(--text-white);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    padding: 10px;
+    transition: transform .15s ease, border-color .15s ease, background .15s ease;
+}
+
+.match-veto-map:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: rgba(255,0,43,0.42);
+    background: rgba(255,0,43,0.08);
+}
+
+.match-veto-map:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+.match-veto-map strong {
+    font-size: 13px;
+}
+
+.match-veto-map span {
+    color: var(--text-gray);
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+}
+
+.match-veto-map.is-ban span {
+    color: #ff6b6b;
+}
+
+.match-veto-map.is-pick span {
+    color: #00E676;
+}
+
+.match-veto-timeline {
+    display: grid;
+    gap: 8px;
+}
+
+.match-veto-step {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    background: rgba(0,0,0,0.20);
+    border: 1px solid rgba(255,255,255,0.055);
+    border-radius: 12px;
+    padding: 10px;
+}
+
+.match-veto-step > span {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    display: grid;
+    place-items: center;
+    color: var(--text-gray);
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.match-veto-step strong {
+    display: block;
+    font-size: 13px;
+}
+
+.match-veto-step small {
+    display: block;
+    color: var(--text-gray);
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.match-veto-step.action-ban > span {
+    color: #ff6b6b;
+}
+
+.match-veto-step.action-pick > span,
+.match-veto-step.action-decider > span {
+    color: #00E676;
+}
+
+@media (max-width: 1100px) {
+    .match-veto-maps {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 700px) {
+    .match-veto-head,
+    .match-veto-turn {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .match-veto-maps {
+        grid-template-columns: 1fr;
+    }
+
+    .match-veto-admin,
+    .match-veto-admin button,
+    .match-veto-admin select,
+    .match-veto-side-actions,
+    .match-veto-side-actions button {
+        width: 100%;
+    }
+}
+
+.match-veto-map {
+    min-height: 116px;
+    position: relative;
+    overflow: hidden;
+    background:
+        linear-gradient(180deg, rgba(0,0,0,.20), rgba(0,0,0,.82)),
+        var(--map-image),
+        #151515;
+    background-size: cover;
+    background-position: center;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 16px;
+    color: var(--text-white);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 5px;
+    padding: 14px;
+    text-align: left;
+    transition: transform .15s ease, border-color .15s ease, filter .15s ease;
+}
+
+.match-veto-map:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: rgba(255,0,43,0.55);
+    filter: brightness(1.12);
+}
+
+.match-veto-map:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+    filter: grayscale(.5);
+}
+
+.match-veto-map strong {
+    position: relative;
+    z-index: 1;
+    font-size: 17px;
+    font-weight: 900;
+    text-shadow: 0 2px 10px rgba(0,0,0,.65);
+}
+
+.match-veto-map span {
+    position: relative;
+    z-index: 1;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .9px;
+}
+
+.match-veto-map.is-ban span {
+    color: #ff6b6b;
+}
+
+.match-veto-map.is-pick span,
+.match-veto-map.is-side span {
+    color: #00E676;
+}
+
+.match-veto-clock {
+    width: 74px;
+    height: 74px;
+    border-radius: 18px;
+    background: rgba(255,0,43,.12);
+    border: 1px solid rgba(255,0,43,.25);
+    display: grid;
+    place-items: center;
+    align-content: center;
+    flex-shrink: 0;
+}
+
+.match-veto-clock b {
+    font-size: 24px;
+    line-height: 1;
+    color: var(--brand-red);
+}
+
+.match-veto-clock small {
+    color: var(--text-gray);
+    font-size: 10px;
+    text-transform: uppercase;
+    font-weight: 900;
+    letter-spacing: .8px;
+}
+
 @media (max-width: 820px) {
     .play-hero,
     .match-lobby-hero {
