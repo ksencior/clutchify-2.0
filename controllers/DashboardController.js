@@ -136,7 +136,10 @@ export const dashboardController = {
                 <div class="activity-main">
                     <div class="activity-topline">
                         <strong>${window.escapeHTML(item.title)}</strong>
-                        <span>${window.escapeHTML(date)}</span>
+                        <span>
+                            ${item.visibility === 'friends' ? '<em class="activity-visibility">Znajomi</em>' : ''}
+                            ${window.escapeHTML(date)}
+                        </span>
                     </div>
 
                     <p>${window.escapeHTML(item.message)}</p>
@@ -151,6 +154,7 @@ export const dashboardController = {
         const icons = {
             profile_updated: '👤',
             team_created: '🛡️',
+            team_joined: '🤝',
             tournament_created: '🏆',
             tournament_team_joined: '✅',
             tournament_team_approved: '🎟️'
@@ -178,6 +182,17 @@ export const dashboardController = {
                     onclick="history.pushState({view: 'profile', id: ${Number(item.target_id)}}, '', '/profile?id=${Number(item.target_id)}'); router.navigate('profile', false, {id: ${Number(item.target_id)}})"
                 >
                     Profil
+                </button>
+            `;
+        }
+
+        if (item.target_type === 'team' && item.metadata?.team_tag) {
+            return `
+                <button
+                    class="btn-ok compact"
+                    onclick="teamProfileController.open('${window.escapeHTML(item.metadata.team_tag)}')"
+                >
+                    Zobacz drużynę
                 </button>
             `;
         }

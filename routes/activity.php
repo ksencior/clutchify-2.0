@@ -1,7 +1,7 @@
 <?php
 
 if ($action === 'get_activity_feed') {
-    requireUserId();
+    $userId = requireUserId();
 
     $limit = (int)($_GET['limit'] ?? 12);
 
@@ -22,6 +22,7 @@ if ($action === 'get_activity_feed') {
             ae.target_type,
             ae.target_id,
             ae.metadata,
+            ae.visibility,
             ae.created_at,
 
             u.id AS actor_id,
@@ -30,12 +31,40 @@ if ($action === 'get_activity_feed') {
         FROM activity_events ae
         LEFT JOIN users u ON u.id = ae.actor_user_id
         LEFT JOIN players p ON p.user_id = u.id
-        WHERE ae.visibility = 'public'
+        WHERE
+            ae.visibility = 'public'
+            OR (
+                ae.visibility = 'friends'
+                AND ae.actor_user_id IS NOT NULL
+                AND (
+                    ae.actor_user_id = ?
+                    OR EXISTS (
+                        SELECT 1
+                        FROM friendships f
+                        WHERE f.status = 'accepted'
+                          AND (
+                              (
+                                  f.requester_id = ?
+                                  AND f.addressee_id = ae.actor_user_id
+                              )
+                              OR
+                              (
+                                  f.addressee_id = ?
+                                  AND f.requester_id = ae.actor_user_id
+                              )
+                          )
+                    )
+                )
+            )
         ORDER BY ae.created_at DESC
         LIMIT {$limit}
     ");
 
-    $stmt->execute();
+    $stmt->execute([
+        $userId,
+        $userId,
+        $userId
+    ]);
 
     $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

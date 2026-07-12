@@ -149,9 +149,12 @@ if ($action === 'respond_notification') {
                     tjr.requester_user_id,
                     tjr.status,
                     t.name AS team_name,
-                    t.captain_id
+                    t.tag AS team_tag,
+                    t.captain_id,
+                    u.username AS requester_username
                 FROM team_join_requests tjr
                 JOIN teams t ON t.id = tjr.team_id
+                JOIN users u ON u.id = tjr.requester_user_id
                 WHERE tjr.id = ?
                 LIMIT 1
             ");
@@ -274,15 +277,17 @@ if ($action === 'respond_notification') {
             logActivity(
                 $pdo,
                 'team_joined',
-                'Nowy gracz w drużynie',
-                'Gracz dołączył do drużyny ' . $request['team_name'] . '.',
+                'Nowy transfer',
+                ($request['requester_username'] ?? 'Gracz') . ' dołączył do drużyny ' . $request['team_name'] . '.',
                 (int)$request['requester_user_id'],
                 'team',
                 (int)$request['team_id'],
                 [
-                    'team_name' => $request['team_name']
+                    'team_name' => $request['team_name'],
+                    'team_tag' => $request['team_tag'] ?? null,
+                    'requester_username' => $request['requester_username'] ?? null
                 ],
-                'public'
+                'friends'
             );
 
             echo json_encode([
@@ -332,7 +337,7 @@ if ($action === 'respond_notification') {
         $teamId = $notif['reference_id'];
         
         // Jeszcze raz weryfikujemy, czy gracz magicznie nie dołączył do innej drużyny w międzyczasie
-        $stmt = $pdo->prepare("SELECT team_id FROM players WHERE user_id = ?");
+        $stmt = $pdo->prepare("SELECT p.team_id, u.username FROM players p JOIN users u ON p.user_id = u.id WHERE p.user_id = ?");
         $stmt->execute([$_SESSION['user_id']]);
         $player = $stmt->fetch();
         
@@ -340,6 +345,10 @@ if ($action === 'respond_notification') {
             echo json_encode(['success' => false, 'message' => 'Należysz już do innej drużyny! Najpierw ją opuść.']);
             exit;
         }
+
+        $stmt = $pdo->prepare("SELECT name, tag FROM teams WHERE id = ?");
+        $stmt->execute([$teamId]);
+        $team = $stmt->fetch();
 
         // Liczymy limit w drużynie (maks 6)
         $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM players WHERE team_id = ?");
@@ -365,6 +374,21 @@ if ($action === 'respond_notification') {
             $stmt->execute([$notifId]);
             
             $pdo->commit();
+            logActivity(
+                $pdo,
+                'team_joined',
+                'Nowy transfer',
+                ($player['username'] ?? 'Gracz') . ' dołączył do drużyny ' . $team['name'] . '.',
+                (int)$_SESSION['user_id'],
+                'team',
+                (int)$teamId,
+                [
+                    'team_name' => $team['name'],
+                    'team_tag' => $team['tag'] ?? null,
+                    'requester_username' => $player['username'] ?? null
+                ],
+                'friends'
+            );
             echo json_encode(['success' => true, 'message' => 'Dołączyłeś do drużyny!']);
         } catch (Exception $e) {
             $pdo->rollBack();

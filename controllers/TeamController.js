@@ -101,6 +101,10 @@ export const teamController = {
                         </div>
 
                         <div class="open-team-actions">
+                            <button class="btn-ok compact" onclick="teamProfileController.open('${window.escapeHTML(team.tag || '')}')">
+                                Profil
+                            </button>
+
                             ${teamController.renderJoinAction(team)}
                         </div>
                     </div>

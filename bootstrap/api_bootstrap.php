@@ -296,7 +296,7 @@ function logActivity(
             $targetType,
             $targetId,
             $metadata ? json_encode($metadata, JSON_UNESCAPED_UNICODE) : null,
-            in_array($visibility, ['public', 'admin'], true) ? $visibility : 'public'
+            in_array($visibility, ['public', 'friends', 'admin'], true) ? $visibility : 'public'
         ]);
     } catch (Throwable $e) {
         /**

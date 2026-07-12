@@ -1,4 +1,15 @@
 <?php
+function normalizeTeamTag(string $tag): string {
+    return strtoupper(trim($tag));
+}
+
+function isValidTeamTag(string $tag): bool {
+    return preg_match('/^[A-Z0-9_-]{1,5}$/', $tag) === 1;
+}
+
+function teamTagValidationMessage(): string {
+    return 'Tag drużyny może mieć 1-5 znaków: litery, cyfry, _ albo -. Bez spacji.';
+}
 if ($action === 'get_teams') {
     $userId = requireUserId();
 
@@ -99,6 +110,140 @@ if ($action === 'get_my_team') {
         ]
     ]);
     exit; }
+if ($action === 'get_team_public') {
+    $viewerId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
+
+    $tag = normalizeTeamTag((string)($_GET['tag'] ?? ''));
+
+    if (!isValidTeamTag($tag)) {
+        jsonError('Nieprawidłowy tag drużyny.', 404);
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT
+            t.id,
+            t.name,
+            t.tag,
+            t.logo,
+            t.is_open,
+            t.captain_id,
+            t.created_at,
+
+            captain.username AS captain_username,
+            captain_player.avatar AS captain_avatar,
+
+            (
+                SELECT COUNT(*)
+                FROM players p
+                WHERE p.team_id = t.id
+            ) AS members_count
+        FROM teams t
+        JOIN users captain ON captain.id = t.captain_id
+        LEFT JOIN players captain_player ON captain_player.user_id = captain.id
+        WHERE UPPER(t.tag) = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$tag]);
+    $team = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$team) {
+        jsonError('Drużyna nie istnieje.', 404);
+    }
+
+    $teamId = (int)$team['id'];
+
+    $stmt = $pdo->prepare("
+        SELECT
+            u.id AS user_id,
+            u.username,
+            p.avatar,
+            p.preferred_role,
+            p.faceit_level,
+            p.region,
+            p.is_substitute
+        FROM players p
+        JOIN users u ON u.id = p.user_id
+        WHERE p.team_id = ?
+        ORDER BY
+            (u.id = ?) DESC,
+            p.is_substitute ASC,
+            u.username ASC
+    ");
+    $stmt->execute([
+        $teamId,
+        (int)$team['captain_id']
+    ]);
+
+    $members = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($members as &$member) {
+        $member['user_id'] = (int)$member['user_id'];
+        $member['is_captain'] = (int)$member['user_id'] === (int)$team['captain_id'];
+        $member['is_substitute'] = (bool)$member['is_substitute'];
+        $member['faceit_level'] = $member['faceit_level'] !== null ? (int)$member['faceit_level'] : null;
+    }
+
+    $viewer = [
+        'is_logged_in' => $viewerId !== null,
+        'team_id' => null,
+        'is_member' => false,
+        'is_captain' => false,
+        'is_admin' => false,
+        'join_request_status' => null,
+        'can_apply' => false
+    ];
+
+    if ($viewerId) {
+        $stmt = $pdo->prepare("
+            SELECT
+                team_id,
+                isAdmin
+            FROM players
+            WHERE user_id = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$viewerId]);
+        $viewerPlayer = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($viewerPlayer) {
+            $viewer['team_id'] = $viewerPlayer['team_id'] !== null ? (int)$viewerPlayer['team_id'] : null;
+            $viewer['is_admin'] = (bool)$viewerPlayer['isAdmin'];
+            $viewer['is_member'] = $viewer['team_id'] === $teamId;
+            $viewer['is_captain'] = $viewerId === (int)$team['captain_id'];
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT status
+            FROM team_join_requests
+            WHERE team_id = ?
+              AND requester_user_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+        ");
+        $stmt->execute([$teamId, $viewerId]);
+        $viewer['join_request_status'] = $stmt->fetchColumn() ?: null;
+
+        $viewer['can_apply'] =
+            !$viewer['is_member']
+            && !$viewer['team_id']
+            && (bool)$team['is_open']
+            && (int)$team['members_count'] < 6
+            && $viewer['join_request_status'] !== 'pending';
+    }
+
+    $team['id'] = (int)$team['id'];
+    $team['captain_id'] = (int)$team['captain_id'];
+    $team['is_open'] = (bool)$team['is_open'];
+    $team['members_count'] = (int)$team['members_count'];
+    $team['is_full'] = $team['members_count'] >= 6;
+    $team['url'] = '/team/' . rawurlencode($team['tag']);
+
+    jsonSuccess([
+        'team' => $team,
+        'members' => $members,
+        'viewer' => $viewer
+    ]);
+}
 if ($action === 'create_team') {
     if (!isset($_SESSION['user_id'])) {
         echo json_encode(['success' => false, 'message' => 'Musisz być zalogowany!']);
@@ -107,12 +252,19 @@ if ($action === 'create_team') {
 
     $input = json_decode(file_get_contents('php://input'), true);
     $name = trim($input['name'] ?? '');
-    $tag = strtoupper(trim($input['tag'] ?? ''));
+    $tag = normalizeTeamTag((string)$input['tag'] ?? '');
     $isOpen = $input['is_open'] ? 1 : 0;
     $userId = $_SESSION['user_id'];
 
     if (empty($name) || empty($tag)) {
         echo json_encode(['success' => false, 'message' => 'Nazwa i tag są wymagane.']);
+        exit;
+    }
+    if (!isValidTeamTag($tag)) {
+        echo json_encode([
+            'success' => false,
+            'message' => teamTagValidationMessage()
+        ]);
         exit;
     }
 
@@ -129,20 +281,6 @@ if ($action === 'create_team') {
         $stmt->execute([$teamId, $userId]);
 
         $pdo->commit();
-        logActivity(
-            $pdo,
-            'team_created',
-            'Nowa drużyna',
-            'Powstała nowa drużyna: ' . $name . '.',
-            $userId,
-            'team',
-            (int)$teamId,
-            [
-                'team_name' => $name,
-                'team_tag' => $tag ?? null
-            ],
-            'public'
-        );
         echo json_encode(['success' => true, 'message' => 'Drużyna utworzona pomyślnie!']);
     } catch (Exception $e) {
         $pdo->rollBack();

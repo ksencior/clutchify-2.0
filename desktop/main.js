@@ -66,10 +66,10 @@ function buildCS2LaunchUri(payload) {
      * CS2 appid = 730.
      * Nie używamy czystego steam://connect, tylko start gry z launch args.
      */
-    let uri = `steam://rungameid/730//+connect ${address}`;
+    let uri = `steam://rungame/730/76561202255233023/+connect%20${address}`;
 
     if (password) {
-        uri += ` +password ${password}`;
+        uri += `%20+password%20${password}`;
     }
 
     return uri;

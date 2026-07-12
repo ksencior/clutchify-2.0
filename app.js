@@ -16,6 +16,7 @@ import { adminController } from './controllers/AdminController.js';
 import { playersController } from './controllers/PlayersController.js';
 import { playController } from './controllers/PlayController.js';
 import { matchLobbyController } from './controllers/MatchLobbyController.js';
+import { teamProfileController } from './controllers/TeamProfileController.js';
 
 window.authController = authController;
 window.setupController = setupController;
@@ -26,6 +27,7 @@ window.playersController = playersController;
 window.notificationController = notificationController;
 window.playController = playController;
 window.matchLobbyController = matchLobbyController;
+window.teamProfileController = teamProfileController;
 
 window.wsClient = null;
 window.onlineUsers = new Set();
@@ -165,6 +167,30 @@ const getViewedProfileId = () => {
     return window.currentViewedProfileId
         || urlParams.get('id')
         || getLoggedUserId();
+};
+
+const getTeamTagFromPath = (path = window.location.pathname) => {
+    const match = path.match(/^\/team\/([^/?#]+)\/?$/i);
+
+    if (!match) return null;
+
+    try {
+        return decodeURIComponent(match[1]).trim().toUpperCase();
+    } catch (_) {
+        return match[1].trim().toUpperCase();
+    }
+};
+
+const getTeamRouteTag = (params = {}) => {
+    return params.tag
+        || window.history.state?.tag
+        || getTeamTagFromPath();
+};
+
+const isPublicTeamRoute = (viewName, params = {}) => {
+    if (viewName !== 'team') return false;
+
+    return !!getTeamRouteTag(params);
 };
 
 const setProfileStatusDot = (status) => {
@@ -446,12 +472,14 @@ const ViewSkeletons = {
 
 const router = {
     navigate: async (viewName, updateUrl = true, params = {}) => {
-        const publicProfileRoute = isPublicProfileRoute(viewName, params);
+        const publicProfileRoute    = isPublicProfileRoute(viewName, params);
+        const publicTeamRoute       = isPublicTeamRoute(viewName, params);
 
         if (
             viewName !== 'login'
             && viewName !== 'register'
             && !publicProfileRoute
+            && !publicTeamRoute
             && !AppState.isLoggedIn()
         ) {
             viewName = 'login';
@@ -530,6 +558,17 @@ const router = {
                             `/profile`
                         );
                     }
+                } else if (viewName === 'team') {
+                    const tag = params.tag || teamProfileController.currentTag || getTeamTagFromPath();
+
+                    history.pushState(
+                        {
+                            view: 'team',
+                            tag
+                        },
+                        '',
+                        `/team/${encodeURIComponent(tag)}`
+                    );
                 } else if (viewName === 'match') {
                     const id = params.id || matchLobbyController.currentId || new URLSearchParams(location.search).get('id');
 
@@ -571,6 +610,8 @@ const router = {
             await tournamentViewController.init();
         } else if (viewName === 'profile') {
             await profileController.init();
+        } else if (viewName === 'team') {
+            await teamProfileController.init();
         } else if (viewName === 'friends') {
             await friendsController.init();
         } else if (viewName === 'settings') {
@@ -583,7 +624,7 @@ const router = {
             await playController.init();
         } else if (viewName === 'match') {
             await matchLobbyController.init();
-        }
+        } 
     }
 };
 
@@ -700,6 +741,12 @@ window.onpopstate = (event) => {
         router.navigate(event.state.view, false, event.state);
         return;
     }
+    
+    const teamTag = getTeamTagFromPath();
+    if (teamTag) {
+        router.navigate('team', false, { tag: teamTag });
+        return;
+    }
 
     const vanityUsername = getVanityUsernameFromPath();
 
@@ -717,13 +764,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     await window.bootstrapLoggedInServices?.();
     
     const vanityUsername = getVanityUsernameFromPath();
+    const teamTag = getTeamTagFromPath();
     const urlParams = new URLSearchParams(window.location.search);
 
     let currentPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
     let defaultView = currentPath ? currentPath : 'dashboard';
     let initialParams = {};
 
-    if (vanityUsername) {
+    if (teamTag) {
+        defaultView = 'team';
+        initialParams = {
+            tag: teamTag
+        }
+    } else if (vanityUsername) {
         defaultView = 'profile';
         initialParams = {
             username: vanityUsername
