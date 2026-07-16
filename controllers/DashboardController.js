@@ -21,7 +21,8 @@ export const dashboardController = {
 
         usernameEl.innerText = AppState.isLoggedIn() ? AppState.getUser().username : 'Nowy_Gracz';
         teamEl.innerText = AppState.getUser().player.team_id !== null? AppState.getUser().player.team_name : "Brak drużyny";
-        avatarEl.src = `https://ui-avatars.com/api/?name=${AppState.isLoggedIn() ? AppState.getUser().username : 'P'}&background=121212&color=ff002b`;
+        const avatarUrl = (AppState.getUser().player.avatar != null) ? AppState.getUser().player.avatar : `https://ui-avatars.com/api/?name=${AppState.isLoggedIn() ? AppState.getUser().username : 'P'}&background=121212&color=ff002b`;
+        avatarEl.src = avatarUrl;
 
         if (!localStorage.getItem("startPopoutSeen")) {
             window.Popout.create("Witaj na Clutchify.gg!", `Hej, ${AppState.getUser().username}! Miej na uwadze, że aplikacja dalej jest w wczesnej fazie alpha. Możesz przyczynić się do ulepszania jej,
