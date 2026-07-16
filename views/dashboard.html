@@ -8,31 +8,34 @@
             <p style="color: var(--text-gray); font-size: 13px; margin-top: 5px;" id="dashboard-team">Steam ID: Brak połączenia</p>
         </div>
     </div>
-    <div class="mode-container">
-        <div class="mode-item" onclick="router.navigate('tournaments')">
-            <div class="mode-poster" style="height: 300px; background: #fa1616; background: linear-gradient(0deg,rgba(250, 22, 22, 1) 0%, var(--bg-card) 85%); display: flex; justify-content: center; align-items: center; font-size: 500%">
-                🌐
+    <div style="display: flex; justify-content: center">
+        <div class="mode-container">
+            <div class="mode-item" onclick="router.navigate('tournaments')">
+                <div class="mode-poster" style="height: 300px; background: #fa1616; background: linear-gradient(0deg,rgba(250, 22, 22, 1) 0%, var(--bg-card) 85%); display: flex; justify-content: center; align-items: center; font-size: 500%">
+                    🌐
+                </div>
+                <div class="mode-name" style="height: 80px; display: flex; justify-content: center; align-items: center;">
+                    <h3 style="font-weight: 500; text-transform: uppercase; letter-spacing: 1px; font-size: 120%;">Przeglądaj turnieje</h3>
+                </div>
             </div>
-            <div class="mode-name" style="height: 80px; display: flex; justify-content: center; align-items: center;">
-                <h3 style="font-weight: 500; text-transform: uppercase; letter-spacing: 1px; font-size: 120%;">Przeglądaj turnieje</h3>
+            <div class="mode-item"  onclick="router.navigate('teams')">
+                <div class="mode-poster" style="height: 300px; background: #fa1616; background: linear-gradient(0deg,rgba(250, 22, 22, 1) 0%, var(--bg-card) 85%); display: flex; justify-content: center; align-items: center; font-size: 500%;">
+                    👥
+                </div>
+                <div class="mode-name" style="height: 80px; display: flex; justify-content: center; align-items: center;">
+                    <h3 style="font-weight: 500; text-transform: uppercase; letter-spacing: 1px; font-size: 120%;">Drużyny</h3>
+                </div>
+            </div>
+            <div class="mode-item"  onclick='Toast.show("W budowie")'>
+                <div class="mode-poster" style="height: 300px; background: #fa1616; background: linear-gradient(0deg,rgba(250, 22, 22, 1) 0%, var(--bg-card) 85%); display: flex; justify-content: center; align-items: center; font-size: 500%">
+                    🏆
+                </div>
+                <div class="mode-name" style="height: 80px; display: flex; justify-content: center; align-items: center;">
+                    <h3 style="font-weight: 500; text-transform: uppercase; letter-spacing: 1px; font-size: 120%;">Nagrody</h3>
+                </div>
             </div>
         </div>
-        <div class="mode-item"  onclick="router.navigate('teams')">
-            <div class="mode-poster" style="height: 300px; background: #fa1616; background: linear-gradient(0deg,rgba(250, 22, 22, 1) 0%, var(--bg-card) 85%); display: flex; justify-content: center; align-items: center; font-size: 500%;">
-                👥
-            </div>
-            <div class="mode-name" style="height: 80px; display: flex; justify-content: center; align-items: center;">
-                <h3 style="font-weight: 500; text-transform: uppercase; letter-spacing: 1px; font-size: 120%;">Drużyny</h3>
-            </div>
-        </div>
-        <div class="mode-item"  onclick='Toast.show("W budowie")'>
-            <div class="mode-poster" style="height: 300px; background: #fa1616; background: linear-gradient(0deg,rgba(250, 22, 22, 1) 0%, var(--bg-card) 85%); display: flex; justify-content: center; align-items: center; font-size: 500%">
-                🏆
-            </div>
-            <div class="mode-name" style="height: 80px; display: flex; justify-content: center; align-items: center;">
-                <h3 style="font-weight: 500; text-transform: uppercase; letter-spacing: 1px; font-size: 120%;">Nagrody</h3>
-            </div>
-        </div>
+        <iframe src="https://discord.com/widget?id=1410924487125368874&theme=dark" width="250" height="400" allowtransparency="true" frameborder="0" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"></iframe>
     </div>
     <section class="dashboard-activity-zone">
         <div class="zone-heading">
