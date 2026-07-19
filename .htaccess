@@ -6,17 +6,22 @@
 
     RewriteRule ^index\.html$ - [L]
 
+    # MatchZy remote JSON
+    RewriteRule ^matchzy/match_([0-9]+)\.json$ api.php?action=get_matchzy_config&match_id=$1 [L,QSA]
+
+    # MatchZy event webhook
+    RewriteRule ^matchzy/events$ api.php?action=matchzy_event [L,QSA]
+
+    # Social preview dla /u/username — Discord/FB/Twitter/Slack itd.
+    # Też musi być przed SPA fallbackiem.
+    RewriteCond %{HTTP_USER_AGENT} (Discordbot|facebookexternalhit|Twitterbot|Slackbot|TelegramBot|WhatsApp|LinkedInBot) [NC]
+    RewriteRule ^u/([A-Za-z0-9_.-]{3,24})/?$ share-profile.php?username=$1 [L,QSA]
+
+    # Realne pliki i foldery puszczamy normalnie.
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
-    # Social preview dla /u/username — Discord/FB/Twitter/Slack itd.
-    RewriteCond %{HTTP_USER_AGENT} (Discordbot|facebookexternalhit|Twitterbot|Slackbot|TelegramBot|WhatsApp|LinkedInBot) [NC]
-    RewriteRule ^u/([A-Za-z0-9_.-]{3,24})/?$ share-profile.php?username=$1 [L,QSA]
-
-    # SPA fallback: /dashboard, /profile, /u/username itd.
+    # SPA fallback: /dashboard, /profile, /u/username, /team/TAG itd.
     RewriteRule ^ index.html [L,QSA]
-
-    # MatchZy remote JSON
-    RewriteRule ^matchzy/match_([0-9]+)\.json$ api.php?action=get_matchzy_config&match_id=$1 [L,QSA]
 </IfModule>

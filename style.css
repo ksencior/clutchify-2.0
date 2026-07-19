@@ -3645,6 +3645,84 @@ html.auth-mode .sidebar {
     }
 }
 
+/* --- MATCH SERVER CONNECT --- */
+.match-server-card {
+    background:
+        radial-gradient(circle at top right, rgba(0,230,118,0.12), transparent 34%),
+        var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    padding: 22px;
+    margin-bottom: 20px;
+}
+
+.match-server-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    align-items: flex-start;
+    margin-bottom: 16px;
+}
+
+.match-server-head h2 {
+    font-size: 24px;
+    margin: 4px 0 6px;
+}
+
+.match-server-head p {
+    color: var(--text-gray);
+    font-size: 13px;
+}
+
+#match-server-countdown {
+    min-width: 78px;
+    height: 58px;
+    border-radius: 16px;
+    background: rgba(0,230,118,0.10);
+    border: 1px solid rgba(0,230,118,0.24);
+    display: grid;
+    place-items: center;
+    color: #00E676;
+    font-size: 20px;
+    font-weight: 900;
+}
+
+.match-server-connect {
+    display: grid;
+    gap: 12px;
+}
+
+.match-server-connect code {
+    display: block;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 14px;
+    color: var(--text-white);
+    word-break: break-all;
+}
+
+.match-server-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.match-server-connect small {
+    color: var(--text-gray);
+}
+
+@media (max-width: 700px) {
+    .match-server-head {
+        flex-direction: column;
+    }
+
+    .match-server-actions,
+    .match-server-actions button {
+        width: 100%;
+    }
+}
+
 /* =========================================================
    PLAY HUB + MATCH LOBBY
    ========================================================= */

@@ -186,7 +186,8 @@ function csrfProtectedActions(): array {
         'create_scrim_post',
         'close_scrim_post',
         'send_scrim_offer',
-        'respond_scrim_offer'
+        'respond_scrim_offer',
+        'check_match_server_join',
     ];
 }
 

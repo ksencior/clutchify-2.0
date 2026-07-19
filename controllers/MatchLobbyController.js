@@ -5,6 +5,9 @@ export const matchLobbyController = {
     lastData: null,
     vetoTimer: null,
     vetoAutoResolveInFlight: false,
+    serverTimer: null,
+    pollTimer: null,
+    serverJoinCheckInFlight: false,
 
     init: async () => {
         window.matchLobbyController = matchLobbyController;
@@ -64,6 +67,8 @@ export const matchLobbyController = {
 
         matchLobbyController.renderReadyBar(ready);
         matchLobbyController.renderVeto(data);
+        matchLobbyController.renderServerConnect(data);
+        matchLobbyController.startLobbyPolling(data);
         matchLobbyController.renderTeam('a', teams.a, ready.team_a || {});
         matchLobbyController.renderTeam('b', teams.b, ready.team_b || {});
         matchLobbyController.renderPlayerControls(data);
@@ -461,6 +466,182 @@ export const matchLobbyController = {
             </div>
         `;
     },
+    checkServerJoin: async () => {
+        if (matchLobbyController.serverJoinCheckInFlight) {
+            return;
+        }
+
+        matchLobbyController.serverJoinCheckInFlight = true;
+
+        try {
+            const response = await window.apiFetch('api.php?action=check_match_server_join', {
+                method: 'POST',
+                body: JSON.stringify({
+                    match_id: Number(matchLobbyController.currentId)
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.loaded) {
+                window.Toast.show('Wykryto gracza na serwerze. MatchZy został wczytany.', 'success');
+
+                matchLobbyController.notifyLobbyUpdate(data.target_ids || []);
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            matchLobbyController.serverJoinCheckInFlight = false;
+        }
+    },
+    clearServerTimer: () => {
+        if (matchLobbyController.serverTimer) {
+            clearInterval(matchLobbyController.serverTimer);
+            matchLobbyController.serverTimer = null;
+        }
+    },
+
+    clearPolling: () => {
+        if (matchLobbyController.pollTimer) {
+            clearInterval(matchLobbyController.pollTimer);
+            matchLobbyController.pollTimer = null;
+        }
+    },
+
+    startLobbyPolling: (data) => {
+        matchLobbyController.clearPolling();
+
+        const status = data.match?.status;
+
+        if (!['server_ready', 'live'].includes(status)) {
+            return;
+        }
+
+        matchLobbyController.pollTimer = setInterval(async () => {
+            if (matchLobbyController.lastData?.match?.status === 'server_ready') {
+                await matchLobbyController.checkServerJoin();
+            }
+
+            await matchLobbyController.load();
+        }, 5000);
+    },
+
+    renderServerConnect: (data) => {
+        const card = document.getElementById('match-server-card');
+        const status = document.getElementById('match-server-status');
+        const countdown = document.getElementById('match-server-countdown');
+        const connectBox = document.getElementById('match-server-connect');
+
+        if (!card || !status || !countdown || !connectBox) return;
+
+        matchLobbyController.clearServerTimer();
+
+        const match = data.match || {};
+        const server = data.server_connect || null;
+
+        if (!server || !['server_ready', 'live', 'finished'].includes(match.status)) {
+            card.style.display = 'none';
+            return;
+        }
+
+        card.style.display = 'block';
+
+        if (match.status === 'finished') {
+            status.textContent = 'Mecz zakończony. Serwer został zresetowany.';
+            countdown.textContent = 'GG';
+            connectBox.innerHTML = `
+                <div class="match-lobby-callout">
+                    <strong>Wynik</strong>
+                    <span>${Number(match.team_a_score || 0)}:${Number(match.team_b_score || 0)}</span>
+                </div>
+            `;
+            return;
+        }
+
+        if (match.status === 'live') {
+            status.textContent = 'Mecz jest live na serwerze.';
+            countdown.textContent = 'LIVE';
+        } else {
+            status.textContent = 'Serwer czeka na pierwszego gracza. Po wejściu MatchZy wczyta konfigurację automatycznie.';
+        }
+
+        connectBox.innerHTML = `
+            <code>${window.escapeHTML(server.connect || '')}</code>
+
+            <div class="match-server-actions">
+                <button class="btn-ok compact" onclick="matchLobbyController.copyConnect()">
+                    Kopiuj connect
+                </button>
+
+                ${window.ClutchifyDesktop?.isDesktop ? `
+                    <button class="btn-confirm compact" onclick="matchLobbyController.desktopConnect()">
+                        Połącz
+                    </button>
+                ` : ''}
+            </div>
+
+            ${server.server_name ? `<small>${window.escapeHTML(server.server_name)}</small>` : ''}
+        `;
+
+        if (match.status !== 'server_ready' || !server.deadline_at) {
+            return;
+        }
+
+        const tick = () => {
+            const deadline = new Date(String(server.deadline_at).replace(' ', 'T')).getTime();
+            const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+
+            const minutes = Math.floor(remaining / 60);
+            const seconds = String(remaining % 60).padStart(2, '0');
+
+            countdown.textContent = `${minutes}:${seconds}`;
+
+            if (remaining <= 0) {
+                status.textContent = 'Czas na dołączenie minął. Jeżeli mecz nie ruszył, skontaktuj się z adminem.';
+                matchLobbyController.clearServerTimer();
+            }
+        };
+
+        tick();
+        matchLobbyController.serverTimer = setInterval(tick, 500);
+    },
+
+    copyConnect: async () => {
+        const connect = matchLobbyController.lastData?.server_connect?.connect;
+
+        if (!connect) {
+            window.Toast.show('Brak connect stringa.', 'error');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(connect);
+            window.Toast.show('Skopiowano connect string.', 'success');
+        } catch (_) {
+            window.Toast.show(connect, 'info');
+        }
+    },
+
+    desktopConnect: async () => {
+        const connect = matchLobbyController.lastData?.server_connect?.connect || '';
+        const match = connect.match(/^connect\s+([^;\s]+)(?:\s*;\s*password\s+([A-Za-z0-9_-]+))?/i);
+
+        if (!match || !window.ClutchifyDesktop?.connectToServer) {
+            window.Toast.show('Desktop connect niedostępny.', 'error');
+            return;
+        }
+
+        const result = await window.ClutchifyDesktop.connectToServer({
+            address: match[1],
+            password: match[2] || ''
+        });
+
+        if (result?.success) {
+            window.Toast.show('Uruchamiam CS2...', 'success');
+        } else {
+            window.Toast.show(result?.message || 'Nie udało się uruchomić CS2.', 'error');
+        }
+    },
 
     renderPlayerControls: (data) => {
         const container = document.getElementById('match-lobby-player-controls');
@@ -469,11 +650,21 @@ export const matchLobbyController = {
         const match = data.match;
         const viewer = data.viewer || {};
 
+        if (match.status === 'server_ready') {
+            container.innerHTML = `
+                <div class="match-lobby-callout is-live">
+                    <strong>Serwer gotowy.</strong>
+                    <span>Skopiuj connect wyżej, wejdź na serwer i daj READY w grze.</span>
+                </div>
+            `;
+            return;
+        }
+
         if (match.status === 'live') {
             container.innerHTML = `
                 <div class="match-lobby-callout is-live">
                     <strong>Mecz jest live.</strong>
-                    <span>Ready check został zakończony.</span>
+                    <span>Powodzenia!</span>
                 </div>
             `;
             return;

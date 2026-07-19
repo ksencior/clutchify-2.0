@@ -48,6 +48,15 @@ function matchLobbyGetMatch(PDO $pdo, int $matchId): ?array {
             tm.started_at,
             tm.finished_at,
             tm.created_at,
+            tm.connect_password_encrypted,
+            tm.server_ready_at,
+            tm.join_deadline_at,
+            tm.matchzy_event_token,
+            tm.matchzy_event_url,
+            tm.matchzy_series_started_at,
+            tm.matchzy_going_live_at,
+            tm.team_a_score,
+            tm.team_b_score,
 
             t.title AS tournament_title,
             t.status AS tournament_status,
@@ -103,6 +112,7 @@ function matchLobbyStatusLabel(string $status): string {
     return match ($status) {
         'pending' => 'Oczekuje',
         'ready_check' => 'Ready check',
+        'server_ready' => 'Serwer gotowy',
         'live' => 'Live',
         'finished' => 'Zakończony',
         'cancelled' => 'Anulowany',
@@ -689,7 +699,7 @@ function matchVetoAutoStartMatchIfCompleted(PDO $pdo, array $match): bool {
     }
 
     try {
-        return matchzyLoadMatchOnServer($pdo, $fresh);
+        return matchzyPrepareMatchServer($pdo, $fresh);
     } catch (Throwable $e) {
         $stmt = $pdo->prepare("
             UPDATE tournament_matches
@@ -858,6 +868,21 @@ function matchLobbyBuildResponse(PDO $pdo, array $match, int $viewerId, bool $is
 
     $match['status_label'] = matchLobbyStatusLabel((string)$match['status']);
 
+    $serverConnect = null;
+
+    if (in_array($match['status'], ['server_ready', 'live'], true)) {
+        $connectString = matchzyConnectString($match);
+
+        if ($connectString) {
+            $serverConnect = [
+                'connect' => $connectString,
+                'address' => $match['game_server_public_address'],
+                'deadline_at' => $match['join_deadline_at'] ?? null,
+                'server_name' => $match['game_server_name'] ?? null
+            ];
+        }
+    }
+
     return [
         'match' => $match,
         'teams' => [
@@ -884,7 +909,8 @@ function matchLobbyBuildResponse(PDO $pdo, array $match, int $viewerId, bool $is
             'is_admin' => $isAdmin,
             'can_ready' => $canReady,
             'is_ready' => $viewerReady
-        ]
+        ],
+        'server_connect' => $serverConnect
     ];
 }
 
@@ -933,9 +959,9 @@ if ($action === 'get_my_matches') {
                 t.status IN ('in_progress', 'finished')
                 OR tm.match_source = 'scrim'
             )
-          AND tm.status IN ('pending', 'ready_check', 'live', 'finished')
+          AND tm.status IN ('pending', 'ready_check', 'server_ready', 'live', 'finished')
         ORDER BY
-            FIELD(tm.status, 'live', 'ready_check', 'pending', 'finished'),
+            FIELD(tm.status, 'live', 'server_ready', 'ready_check', 'pending', 'finished')
             tm.round_number ASC,
             tm.match_number ASC
         LIMIT 30
@@ -1377,4 +1403,51 @@ if ($action === 'auto_resolve_map_veto') {
         'match_started' => $result['match_started'] ?? false,
         'target_ids' => $freshMatch ? matchLobbyTargetUserIds($pdo, $freshMatch) : []
     ]);
+}
+if ($action === 'check_match_server_join') {
+    $userId = requireUserId();
+    $input = getJsonInput();
+
+    $matchId = (int)($input['match_id'] ?? 0);
+
+    if (!$matchId) {
+        jsonError('Brak ID meczu.');
+    }
+
+    $match = matchLobbyGetMatch($pdo, $matchId);
+
+    if (!$match) {
+        jsonError('Mecz nie istnieje.', 404);
+    }
+
+    $isAdmin = matchLobbyIsAdmin($pdo, $userId);
+    $viewerTeamId = matchLobbyGetUserTeamId($pdo, $userId);
+
+    if (!matchLobbyCanView($match, $isAdmin, $viewerTeamId)) {
+        jsonError('Nie masz dostępu do tego lobby.', 403);
+    }
+
+    try {
+        $result = matchzyLoadPreparedMatchIfHumanJoined($pdo, $match);
+        $freshMatch = matchLobbyGetMatch($pdo, $matchId);
+
+        jsonSuccess([
+            'message' => $result['message'],
+            'loaded' => (bool)$result['loaded'],
+            'has_human' => (bool)$result['has_human'],
+            'target_ids' => $freshMatch ? matchLobbyTargetUserIds($pdo, $freshMatch) : []
+        ]);
+    } catch (Throwable $e) {
+        $stmt = $pdo->prepare("
+            UPDATE tournament_matches
+            SET matchzy_load_error = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([
+            $e->getMessage(),
+            $matchId
+        ]);
+
+        jsonError('Nie udało się sprawdzić serwera: ' . $e->getMessage());
+    }
 }
