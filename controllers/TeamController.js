@@ -1,6 +1,7 @@
 import { AppState } from '../state.js';
 
 export const teamController = {
+    scrimData: null,
     init: async () => {
         teamController.bindEvents();
         window.teamController = teamController;
@@ -228,6 +229,8 @@ export const teamController = {
 
         const currentUserId = AppState.isLoggedIn() ? AppState.getUser().id : 0;
         const isCurrentUserLider = team.captain_id === currentUserId;
+        teamController.currentTeam = team;
+        teamController.loadScrimCenter();
 
         // Renderujemy 6 slotów (5 głównych + 1 rezerwa)
         for (let i = 0; i < 6; i++) {
@@ -433,5 +436,305 @@ export const teamController = {
         } catch (err) {
             window.Toast.show('Wystąpił błąd', 'error');
         }
-    }
+    },
+    loadScrimCenter: async () => {
+        const form = document.getElementById('scrim-leader-form');
+        const myPost = document.getElementById('scrim-my-post');
+        const openPosts = document.getElementById('scrim-open-posts');
+        const offers = document.getElementById('scrim-offers');
+
+        if (!form || !myPost || !openPosts || !offers) return;
+
+        try {
+            const response = await fetch('api.php?action=get_scrim_center');
+            const data = await response.json();
+
+            if (!data.success || !data.has_team) {
+                return;
+            }
+
+            teamController.scrimData = data;
+
+            const isCaptain = !!data.my_team?.is_captain || !!data.my_team?.is_admin;
+            form.style.display = isCaptain && !data.my_post ? 'block' : 'none';
+
+            teamController.renderMyScrimPost(data.my_post);
+            teamController.renderOpenScrims(data.open_posts || [], isCaptain);
+            teamController.renderScrimOffers(data, isCaptain);
+        } catch (error) {
+            console.error(error);
+        }
+    },
+
+    scrimSettingsLabel: (item) => {
+        const ff = item.friendly_fire ? 'FF ON' : 'FF OFF';
+        const ot = item.overtime_enabled ? 'OT ON' : 'OT OFF';
+        const knife = item.knife_round ? 'Knife ON' : 'Knife OFF';
+
+        return `${String(item.match_format || 'bo1').toUpperCase()} • MR${Number(item.mr || 12)} • ${ff} • ${ot} • ${knife}`;
+    },
+
+    renderMyScrimPost: (post) => {
+        const container = document.getElementById('scrim-my-post');
+        if (!container) return;
+
+        if (!post) {
+            container.innerHTML = '';
+            return;
+        }
+
+        container.innerHTML = `
+            <article class="scrim-post-card is-own">
+                <div>
+                    <span class="eyebrow">Twoje ogłoszenie</span>
+                    <h3>${window.escapeHTML(post.title)}</h3>
+                    <p>${window.escapeHTML(post.description || 'Brak opisu.')}</p>
+                    <small>${teamController.scrimSettingsLabel(post)}</small>
+                </div>
+
+                <button class="btn-cancel compact" onclick="teamController.closeScrimPost(${Number(post.id)})">
+                    Zamknij
+                </button>
+            </article>
+        `;
+    },
+
+    renderOpenScrims: (posts, isCaptain) => {
+        const container = document.getElementById('scrim-open-posts');
+        if (!container) return;
+
+        if (!posts.length) {
+            container.innerHTML = '<div class="empty-state">Brak otwartych scrimów.</div>';
+            return;
+        }
+
+        container.innerHTML = posts.map(post => `
+            <article class="scrim-post-card">
+                <div>
+                    <strong>[${window.escapeHTML(post.team_tag)}] ${window.escapeHTML(post.team_name)}</strong>
+                    <h3>${window.escapeHTML(post.title)}</h3>
+                    <p>${window.escapeHTML(post.description || 'Brak opisu.')}</p>
+                    <small>${teamController.scrimSettingsLabel(post)}</small>
+                </div>
+
+                ${isCaptain ? `
+                    <button class="btn-confirm compact" onclick="teamController.sendScrimOffer(${Number(post.id)})">
+                        Złóż ofertę
+                    </button>
+                ` : `
+                    <button class="btn-ok compact" disabled>
+                        Tylko lider
+                    </button>
+                `}
+            </article>
+        `).join('');
+    },
+
+    renderScrimOffers: (data, isCaptain) => {
+        const container = document.getElementById('scrim-offers');
+        if (!container) return;
+
+        const incoming = data.incoming_offers || [];
+        const outgoing = data.outgoing_offers || [];
+
+        if (!incoming.length && !outgoing.length) {
+            container.innerHTML = '<div class="empty-state">Brak ofert scrimowych.</div>';
+            return;
+        }
+
+        const incomingHtml = incoming.map(offer => `
+            <article class="scrim-offer-card">
+                <div>
+                    <strong>Oferta od [${window.escapeHTML(offer.challenger_tag)}] ${window.escapeHTML(offer.challenger_name)}</strong>
+                    <p>${window.escapeHTML(offer.message || 'Brak wiadomości.')}</p>
+                    <small>Do ogłoszenia: ${window.escapeHTML(offer.post_title || '-')}</small>
+                </div>
+
+                ${isCaptain ? `
+                    <div class="scrim-offer-actions">
+                        <button class="btn-confirm compact" onclick="teamController.respondScrimOffer(${Number(offer.id)}, 'accept')">
+                            Akceptuj
+                        </button>
+
+                        <button class="btn-cancel compact" onclick="teamController.respondScrimOffer(${Number(offer.id)}, 'reject')">
+                            Odrzuć
+                        </button>
+                    </div>
+                ` : ''}
+            </article>
+        `).join('');
+
+        const outgoingHtml = outgoing.map(offer => `
+            <article class="scrim-offer-card">
+                <div>
+                    <strong>Oferta do [${window.escapeHTML(offer.owner_tag)}] ${window.escapeHTML(offer.owner_name)}</strong>
+                    <p>Status: ${window.escapeHTML(offer.status)}</p>
+                    ${offer.match_id ? `
+                        <button class="btn-ok compact" onclick="teamController.openScrimMatch(${Number(offer.match_id)})">
+                            Otwórz lobby
+                        </button>
+                    ` : ''}
+                </div>
+            </article>
+        `).join('');
+
+        container.innerHTML = incomingHtml + outgoingHtml;
+    },
+
+    createScrimPost: async () => {
+        const payload = {
+            title: document.getElementById('scrim-title')?.value || '',
+            description: document.getElementById('scrim-description')?.value || '',
+            match_format: document.getElementById('scrim-format')?.value || 'bo1',
+            mr: Number(document.getElementById('scrim-mr')?.value || 12),
+            friendly_fire: document.getElementById('scrim-friendly-fire')?.checked ? 1 : 0,
+            overtime_enabled: document.getElementById('scrim-overtime')?.checked ? 1 : 0,
+            knife_round: document.getElementById('scrim-knife-round')?.checked ? 1 : 0
+        };
+
+        const response = await window.apiFetch('api.php?action=create_scrim_post', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            window.Toast.show(data.message || 'Nie udało się utworzyć scrima.', 'error');
+            return;
+        }
+
+        window.Toast.show(data.message || 'Scrim opublikowany.', 'success');
+        await teamController.loadScrimCenter();
+    },
+
+    closeScrimPost: async (postId) => {
+        const response = await window.apiFetch('api.php?action=close_scrim_post', {
+            method: 'POST',
+            body: JSON.stringify({
+                post_id: Number(postId)
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            window.Toast.show(data.message || 'Nie udało się zamknąć scrima.', 'error');
+            return;
+        }
+
+        window.Toast.show(data.message || 'Ogłoszenie zamknięte.', 'success');
+        await teamController.loadScrimCenter();
+    },
+
+    sendScrimOffer: (postId) => {
+        const html = `
+            <p style="color: var(--text-gray); font-size: 13px; margin-bottom: 12px;">
+                Możesz dodać krótką wiadomość do lidera drugiej drużyny.
+            </p>
+
+            <textarea id="scrim-offer-message" rows="4" placeholder="Np. możemy grać za 10 minut" style="width:100%; padding:12px; background:var(--bg-dark); border:1px solid var(--border-color); border-radius:8px; color:white;"></textarea>
+
+            <div style="display:flex; gap:10px; margin-top:14px;">
+                <button class="btn-confirm" onclick="teamController.confirmScrimOffer(${Number(postId)})">
+                    Wyślij ofertę
+                </button>
+                <button class="btn-cancel" onclick="Popout.close()">
+                    Anuluj
+                </button>
+            </div>
+        `;
+
+        window.Popout.create('Złożyć ofertę scrima?', '', null, null, 'custom', html);
+    },
+
+    confirmScrimOffer: async (postId) => {
+        const message = document.getElementById('scrim-offer-message')?.value || '';
+
+        const response = await window.apiFetch('api.php?action=send_scrim_offer', {
+            method: 'POST',
+            body: JSON.stringify({
+                post_id: Number(postId),
+                message
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            window.Toast.show(data.message || 'Nie udało się wysłać oferty.', 'error');
+            return;
+        }
+
+        window.Popout.close();
+        window.Toast.show(data.message || 'Oferta wysłana.', 'success');
+
+        if (data.target_ids?.length && window.wsClient?.readyState === WebSocket.OPEN) {
+            data.target_ids.forEach(id => {
+                window.wsClient.send(JSON.stringify({
+                    type: 'notify',
+                    targetId: Number(id)
+                }));
+            });
+        }
+
+        await teamController.loadScrimCenter();
+    },
+
+    respondScrimOffer: async (offerId, decision) => {
+        const response = await window.apiFetch('api.php?action=respond_scrim_offer', {
+            method: 'POST',
+            body: JSON.stringify({
+                offer_id: Number(offerId),
+                decision
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            window.Toast.show(data.message || 'Nie udało się obsłużyć oferty.', 'error');
+            return;
+        }
+
+        window.Toast.show(data.message || 'Oferta obsłużona.', 'success');
+
+        if (data.target_ids?.length && window.wsClient?.readyState === WebSocket.OPEN) {
+            data.target_ids.forEach(id => {
+                window.wsClient.send(JSON.stringify({
+                    type: 'notify',
+                    targetId: Number(id)
+                }));
+            });
+
+            if (data.match_id) {
+                window.wsClient.send(JSON.stringify({
+                    type: 'match_lobby_update',
+                    matchId: Number(data.match_id),
+                    targetIds: data.target_ids.map(Number)
+                }));
+            }
+        }
+
+        await teamController.loadScrimCenter();
+
+        if (data.match_id && decision === 'accept') {
+            teamController.openScrimMatch(Number(data.match_id));
+        }
+    },
+
+    openScrimMatch: (matchId) => {
+        history.pushState(
+            {
+                view: 'match',
+                id: Number(matchId)
+            },
+            '',
+            `/match?id=${Number(matchId)}`
+        );
+
+        router.navigate('match', false, {
+            id: Number(matchId)
+        });
+    },
 };

@@ -705,7 +705,8 @@ if ($action === 'start_practice') {
 
         practiceChangeMapAndRunAfterLoad($server, $map, $joinPassword, [
             'css_prac',
-            'say [Clutchify] Practice mode ON'
+            'say [Clutchify] Practice mode ON',
+            'mp_warmup_end'
         ]);
 
         jsonSuccess([
@@ -800,7 +801,8 @@ if ($action === 'practice_action') {
         if ($practiceAction === 'change_map') {
             $responses = practiceChangeMapAndRunAfterLoad($server, $map, $sessionPassword, [
                 'css_prac',
-                'say [Clutchify] Practice mode ON'
+                'say [Clutchify] Practice mode ON',
+                'mp_warmup_end'
             ]);
         } else {
             $responses = practiceRunCommands($server, $actions[$practiceAction]);

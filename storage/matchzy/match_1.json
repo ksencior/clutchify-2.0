@@ -1,0 +1,33 @@
+{
+    "matchid": 1,
+    "team1": {
+        "name": "aaaaa",
+        "players": {
+            "76561198255264853": "ksencior",
+            "76561194255264853": "padorax123"
+        }
+    },
+    "team2": {
+        "name": "tesciaki",
+        "players": {
+            "76561198225264853": "Gracz_1",
+            "76561198255264851": "Gracz_2"
+        }
+    },
+    "num_maps": 1,
+    "maplist": [
+        "de_cache"
+    ],
+    "map_sides": [
+        "knife"
+    ],
+    "clinch_series": true,
+    "players_per_team": 2,
+    "cvars": {
+        "hostname": "Clutchify | AA vs TEST",
+        "mp_friendlyfire": "0",
+        "mp_overtime_enable": "1",
+        "mp_maxrounds": "24",
+        "mp_halftime": "1"
+    }
+}

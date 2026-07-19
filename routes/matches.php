@@ -1,5 +1,5 @@
 <?php
-
+require_once __DIR__ . '/../helpers/matchzy.php';
 function matchLobbyIsAdmin(PDO $pdo, int $userId): bool {
     $stmt = $pdo->prepare("SELECT isAdmin FROM players WHERE user_id = ? LIMIT 1");
     $stmt->execute([$userId]);
@@ -24,6 +24,18 @@ function matchLobbyGetMatch(PDO $pdo, int $matchId): ?array {
             tm.round_number,
             tm.match_number,
             tm.match_format,
+            tm.match_source,
+            tm.scrim_post_id,
+            tm.scrim_offer_id,
+            tm.match_settings_json,
+            tm.game_server_id,
+            tm.server_assigned_at,
+            tm.matchzy_config_token,
+            tm.matchzy_config_url,
+            tm.matchzy_loaded_at,
+            tm.matchzy_load_error,
+            gs.name AS game_server_name,
+            gs.public_address AS game_server_public_address,
             tm.veto_status,
             tm.veto_started_at,
             tm.veto_turn_started_at,
@@ -55,6 +67,7 @@ function matchLobbyGetMatch(PDO $pdo, int $matchId): ?array {
         LEFT JOIN teams ta ON ta.id = tm.team_a_id
         LEFT JOIN teams tb ON tb.id = tm.team_b_id
         LEFT JOIN teams tw ON tw.id = tm.winner_team_id
+        LEFT JOIN game_servers gs ON gs.id = tm.game_server_id
         WHERE tm.id = ?
         LIMIT 1
     ");
@@ -73,6 +86,15 @@ function matchLobbyGetMatch(PDO $pdo, int $matchId): ?array {
     foreach (['team_a_id', 'team_b_id', 'winner_team_id'] as $field) {
         $match[$field] = $match[$field] !== null ? (int)$match[$field] : null;
     }
+
+    foreach (['scrim_post_id', 'scrim_offer_id', 'game_server_id'] as $field) {
+        if (array_key_exists($field, $match)) {
+            $match[$field] = $match[$field] !== null ? (int)$match[$field] : null;
+        }
+    }
+
+    $settings = json_decode($match['match_settings_json'] ?? '', true);
+    $match['match_settings'] = is_array($settings) ? $settings : [];
 
     return $match;
 }
@@ -666,20 +688,23 @@ function matchVetoAutoStartMatchIfCompleted(PDO $pdo, array $match): bool {
         return false;
     }
 
-    /**
-     * Na tym etapie tylko zmieniamy status.
-     * Następny krok: tutaj podepniemy przydział serwera CS i MatchZy config.
-     */
-    $stmt = $pdo->prepare("
-        UPDATE tournament_matches
-        SET status = 'live',
-            started_at = COALESCE(started_at, NOW())
-        WHERE id = ?
-          AND status != 'live'
-    ");
-    $stmt->execute([(int)$fresh['id']]);
+    try {
+        return matchzyLoadMatchOnServer($pdo, $fresh);
+    } catch (Throwable $e) {
+        $stmt = $pdo->prepare("
+            UPDATE tournament_matches
+            SET matchzy_load_error = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([
+            $e->getMessage(),
+            (int)$fresh['id']
+        ]);
 
-    return $stmt->rowCount() > 0;
+        error_log('[Clutchify] MatchZy load failed for match #' . $fresh['id'] . ': ' . $e->getMessage());
+
+        return false;
+    }
 }
 
 function matchVetoAfterAction(PDO $pdo, int $matchId): array {
@@ -885,6 +910,9 @@ if ($action === 'get_my_matches') {
             tm.status,
             tm.started_at,
             tm.finished_at,
+            tm.match_source,
+            tm.match_format,
+            tm.game_server_id,
 
             t.title AS tournament_title,
             t.status AS tournament_status,
@@ -901,7 +929,10 @@ if ($action === 'get_my_matches') {
         LEFT JOIN teams ta ON ta.id = tm.team_a_id
         LEFT JOIN teams tb ON tb.id = tm.team_b_id
         WHERE (tm.team_a_id = ? OR tm.team_b_id = ?)
-          AND t.status IN ('in_progress', 'finished')
+          AND (
+                t.status IN ('in_progress', 'finished')
+                OR tm.match_source = 'scrim'
+            )
           AND tm.status IN ('pending', 'ready_check', 'live', 'finished')
         ORDER BY
             FIELD(tm.status, 'live', 'ready_check', 'pending', 'finished'),
@@ -921,6 +952,9 @@ if ($action === 'get_my_matches') {
         $match['team_a_id'] = $match['team_a_id'] !== null ? (int)$match['team_a_id'] : null;
         $match['team_b_id'] = $match['team_b_id'] !== null ? (int)$match['team_b_id'] : null;
         $match['status_label'] = matchLobbyStatusLabel((string)$match['status']);
+        $match['match_source'] = $match['match_source'] ?? 'tournament';
+        $match['match_format'] = $match['match_format'] ?? 'bo1';
+        $match['game_server_id'] = $match['game_server_id'] !== null ? (int)$match['game_server_id'] : null;
 
         $teamAPlayers = matchLobbyTeamPlayers($pdo, $match['team_a_id'], (int)$match['id']);
         $teamBPlayers = matchLobbyTeamPlayers($pdo, $match['team_b_id'], (int)$match['id']);

@@ -19,6 +19,7 @@ require_once __DIR__ . '/routes/setup.php';
 require_once __DIR__ . '/routes/profile.php';
 require_once __DIR__ . '/routes/players.php';
 require_once __DIR__ . '/routes/teams.php';
+require_once __DIR__ . '/routes/scrims.php';
 require_once __DIR__ . '/routes/friends.php';
 require_once __DIR__ . '/routes/chat.php';
 require_once __DIR__ . '/routes/notifications.php';
@@ -26,6 +27,7 @@ require_once __DIR__ . '/routes/admin.php';
 require_once __DIR__ . '/routes/tournaments.php';
 require_once __DIR__ . '/routes/activity.php';
 require_once __DIR__ . '/routes/matches.php';
+require_once __DIR__ . '/routes/matchzy.php';
 require_once __DIR__ . '/routes/practice.php';
 
 jsonError('Nieznana akcja API: ' . $action, 404);

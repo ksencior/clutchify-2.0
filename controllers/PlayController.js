@@ -80,6 +80,9 @@ export const playController = {
         const totalReady = Number(ready.total_ready || 0);
         const totalRequired = Number(ready.total_required || 0);
         const percent = totalRequired > 0 ? Math.round((totalReady / totalRequired) * 100) : 0;
+        const trnBtn = match.match_source == 'tournament' ? `<button class="btn-ok" onclick="playController.openTournament(${Number(match.tournament_id)})">
+                        Turniej
+                        </button>` : '';
 
         return `
             <article class="play-match-card status-${window.escapeHTML(match.status)}">
@@ -103,10 +106,7 @@ export const playController = {
                     <button class="btn-confirm" onclick="playController.openMatch(${Number(match.id)})">
                         Otwórz lobby
                     </button>
-
-                    <button class="btn-ok" onclick="playController.openTournament(${Number(match.tournament_id)})">
-                        Turniej
-                    </button>
+                    ${trnBtn}
                 </div>
             </article>
         `;

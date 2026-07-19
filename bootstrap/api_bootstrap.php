@@ -181,7 +181,12 @@ function csrfProtectedActions(): array {
 
         'save_admin_game_server',
         'delete_admin_game_server',
-        'test_admin_game_server_rcon'
+        'test_admin_game_server_rcon',
+
+        'create_scrim_post',
+        'close_scrim_post',
+        'send_scrim_offer',
+        'respond_scrim_offer'
     ];
 }
 

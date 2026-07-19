@@ -16,4 +16,7 @@
 
     # SPA fallback: /dashboard, /profile, /u/username itd.
     RewriteRule ^ index.html [L,QSA]
+
+    # MatchZy remote JSON
+    RewriteRule ^matchzy/match_([0-9]+)\.json$ api.php?action=get_matchzy_config&match_id=$1 [L,QSA]
 </IfModule>
